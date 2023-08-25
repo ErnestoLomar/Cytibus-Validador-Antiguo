@@ -83,6 +83,7 @@ class clSMS(QtCore.QThread):
         #                 Lectura de SMS                 #
         ##################################################
         '''
+        print "Se va a enviar el comando de SMS"
         i = 0
         while (self.parent.locked):
             self.printDebug(self.RED+self.REVERSE+'### Lectura SMS - Locked ###'+self.RESET)
@@ -186,7 +187,7 @@ class clSMS(QtCore.QThread):
                 #self.printDebug("Connect comando accion")
                 #connC = sqlite3.connect(cdDbC)
                 self.printDebug("cursos comando accion")
-                c= dbComando.cursor()
+                c= self.clDB.dbComando.cursor()
                 self.printDebug("select comando accion")
 
                 c.execute("SELECT accion FROM tComando WHERE comando = ?",(comando,))

@@ -6,8 +6,12 @@ import time
 import os
 import sys
 from PyQt4 import QtGui
+from PyQt4.QtCore import QSettings
 from datetime import datetime, timedelta, date
+import datetime as dt
 import subprocess
+from tarjetasDB import obtener_tarjeta_mipase_por_UID
+from alttusDB import registrar_aforo_mipase
 
 os.environ['DISPLAY'] = ":0"
 class clMifare(QtCore.QThread):
@@ -18,6 +22,7 @@ class clMifare(QtCore.QThread):
         self.clDB = clDB
         self.clquectel = clquectel
         self.parent = parent
+        self.settings = QSettings("/home/pi/innobusmx/settings.ini", QSettings.IniFormat)
         #self.preaderLocal = self.ser.ser
 
     def PathTISC(self,tisc):
@@ -25,10 +30,22 @@ class clMifare(QtCore.QThread):
         if not os.path.isfile(path):
             #self.parent.TISC = '/home/pi/innobusmx/data/user/generico.jpg'
             path = '/home/pi/innobusmx/data/user/generico.jpg'            
-            self.clDB.envio(2,"f,"+tisc+","+str(self.clDB.idUnidad)) 
+            self.clDB.envio(2,"f,"+tisc+","+str(self.clDB.idUnidad))
             self.parent.flSendEnvio = True
         return path
-
+    
+    def mostrar_imagen(self, imagen):
+        self.parent.stImgTarjeta = '/home/pi/innobusmx/data/img/'+imagen+'.jpg'
+        self.parent.TISC = "MIPASE"
+        self.parent.stMsg = "NADA"
+        time.sleep(2)
+        self.parent.TISC = ''
+        self.parent.stImgTarjeta = ''
+        self.parent.stSaldoInsuficiente = ""                                    
+        self.parent.stMsgVigencia = ""
+        self.parent.stMsg = ""
+        
+        
     def msgError(self, msgCode, out, csn):
         if (out != "0"):
             #self.parent.lblMsgVigencia.resize(480, 75)
@@ -48,6 +65,7 @@ class clMifare(QtCore.QThread):
 
     def run(self):
         self.preaderLocal = self.ser.setupRFID()
+        tarjeta_de_mi_pase = False
         print '     Siempre leyendo aca'
         print '#############################'
         while(True):
@@ -64,78 +82,105 @@ class clMifare(QtCore.QThread):
                 #self.preaderLocal = self.ser.initRFID()
             #if True:
             try:
-                #print "(",len(self.out),') out', self.out
-                if commOK:
-                    if (self.parent.flMtto or self.parent.TISC != ""):
-                        print "Lector Ocupado"    
-                    elif (self.parent.flTurno or self.parent.flVuelta):
-                        self.parent.closeTV = True
-                    elif (len(self.out) == 3):
-                        if (self.out.find(".") != -1):
-                            subprocess.call("xset dpms force on",shell=True)
-                            #os.system("DISPLAY=:0 xset dpms force on")
-                        if (self.out.find("1") != -1):
-                            python = sys.executable
-                            os.execl(python, python, * sys.argv)
+                
+                try:
+                    ##################### ERNESTO LOMAR #####################
+                    tarjeta_mi_pase = obtener_tarjeta_mipase_por_UID(str(self.out)[:14])
+                    if tarjeta_mi_pase != None:
+                        print "\x1b[1;33m"+"La tarjeta es identificada como MI PASE"
+                        tarjeta_de_mi_pase = True
+                        fecha_actual = dt.date.today()
+                        hora_actual = datetime.now().time()
+                        registro_aforo_mipase = registrar_aforo_mipase(str(self.out)[:14], 0, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), self.clquectel.latitud, self.clquectel.longitud, self.clDB.idTransportista, self.clDB.economico)
+                        if registro_aforo_mipase:
+                            print "\x1b[1;33m"+"Registro de aforo exitoso MI PASE"
+                            if tarjeta_mi_pase[1]:
+                                self.mostrar_imagen("aprobada_mipase")
+                            else:
+                                self.mostrar_imagen("declinada_mipase")
+                        else:
+                            print "\x1b[1;33m"+"No se registro el aforo MI PASE"
                     else:
-                        if (len(self.out) == 19):
-                            out = "001"
-                            err = self.out[14:17]
-                            if (err == "003" or err == "004"):
-                                out = "002"                        
-                            if (err == "001" or err == "101" or err == "102" or err == "103"):
-                                out = "003"
-                            if (self.parent.btnCancel.isVisible()):
-                                print "Pantalla de Operador"
-                            else:
-                                self.msgError(err, out, self.out[0:14])
-                        elif (len(self.out) == 13):
-                            c = self.clDB.dbAforo.cursor()
-                            c.execute("SELECT csn FROM csn WHERE csn = '"+self.out[0:11]+"'")
-                            if c.fetchone():
-                                self.parent.flMtto = True
-                                res = '1'
-                            else:
-                                self.msgError("501", "003", self.out[0:8])
-                                res = '0'
-                            c.close
-                            #if True:
-                            try:
-                                self.preaderLocal.write(res)
-                            #else:
-                            except:
-                                print 'Error al escribir en el puerto'
-                        elif (len(self.out) == 5):
-                            if (self.out.find("000") != -1):
-                                print 'No Alcanzo a leer el CSN de la TISC'
-                            else:
-                                print "Otro Error:",self.out
-                        elif (len(self.out) > 0):
-                            if (self.out[0] == '0' or self.out[0] == '3'):
-                                ok = self.cobrar(self.out)
-                                if not ok:
-                                    self.preaderLocal.write('9999999')
-                                print 'Respuesta del cobro', ok
-                                print 'Termine la primer senial'
-                                print '#############################'                           
-                        elif (len(self.out) == 0):
-                            print 'Reinicio Serial'
-                            if self.parent.flRFID:
-                                self.ser.closeRFID()
-                                self.ser.openRFID(0)
-                                time.sleep(1)
-                        print '     Siempre leyendo aca'
-                        print '#############################'
-                else:
-                    print "initRFID Comm No OK"
-                    #while self.parent.updateFirmware:
-                    #    time.sleep(1)
-                    #print "Inicializando RFID "
-                    self.preaderLocal = self.ser.setupRFID()
-                    time.sleep(1)
-                    #self.preaderLocal = self.ser.initRFID()
+                        tarjeta_mi_pase = False
+                except Exception, e:
+                    print "Fallo la lectura de tarjeta mi pase: " + str(e)
+                ##################### ERNESTO LOMAR #####################
+                
+                #print "(",len(self.out),') out', self.out
+                if not tarjeta_de_mi_pase:
+                    if commOK:
+                        if (self.parent.flMtto or self.parent.TISC != ""):
+                            print "Lector Ocupado"    
+                        elif (self.parent.flTurno or self.parent.flVuelta):
+                            self.parent.closeTV = True
+                        elif (len(self.out) == 3):
+                            if (self.out.find(".") != -1):
+                                subprocess.call("xset dpms force on",shell=True)
+                                #os.system("DISPLAY=:0 xset dpms force on")
+                            if (self.out.find("1") != -1):
+                                self.settings.setValue("apagado_forzado",1)
+                                python = sys.executable
+                                os.execl(python, python, * sys.argv)
+                        else:
+                            if (len(self.out) == 19):
+                                out = "001"
+                                err = self.out[14:17]
+                                if (err == "003" or err == "004"):
+                                    out = "002"                        
+                                if (err == "001" or err == "101" or err == "102" or err == "103"):
+                                    out = "003"
+                                if (self.parent.btnCancel.isVisible()):
+                                    print "Pantalla de Operador"
+                                else:
+                                    self.msgError(err, out, self.out[0:14])
+                            elif (len(self.out) == 13):
+                                c = self.clDB.dbAforo.cursor()
+                                c.execute("SELECT csn FROM csn WHERE csn = '"+self.out[0:11]+"'")
+                                if c.fetchone():
+                                    self.parent.flMtto = True
+                                    res = '1'
+                                else:
+                                    self.msgError("501", "003", self.out[0:8])
+                                    res = '0'
+                                c.close
+                                #if True:
+                                try:
+                                    self.preaderLocal.write(res)
+                                #else:
+                                except:
+                                    print 'Error al escribir en el puerto'
+                            elif (len(self.out) == 5):
+                                if (self.out.find("000") != -1):
+                                    print 'No Alcanzo a leer el CSN de la TISC'
+                                else:
+                                    print "Otro Error:",self.out
+                            elif (len(self.out) > 0):
+                                if (self.out[0] == '0' or self.out[0] == '3'):
+                                    ok = self.cobrar(self.out)
+                                    if not ok:
+                                        self.preaderLocal.write('9999999')
+                                    print 'Respuesta del cobro', ok
+                                    print 'Termine la primer senial'
+                                    print '#############################'                           
+                            elif (len(self.out) == 0):
+                                print 'Reinicio Serial'
+                                if self.parent.flRFID:
+                                    self.ser.closeRFID()
+                                    self.ser.openRFID(0)
+                                    time.sleep(1)
+                            print '     Siempre leyendo aca'
+                            print '#############################'
+                    else:
+                        print "initRFID Comm No OK"
+                        #while self.parent.updateFirmware:
+                        #    time.sleep(1)
+                        #print "Inicializando RFID "
+                        self.preaderLocal = self.ser.setupRFID()
+                        time.sleep(1)
+                        #self.preaderLocal = self.ser.initRFID()
             #else:
-            except:
+            except Exception, e:
+                print "Fallo el run de ClMifare: " + str(e)
                 self.msgError("001", "001", "00000000000000")
                 exc_type, exc_obj, exc_tb = sys.exc_info()
                 fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]

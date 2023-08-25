@@ -4,6 +4,7 @@
 import os
 import sys
 import sqlite3
+from PyQt4.QtCore import QSettings
 
 class sqLite():
     idTransportista = ""
@@ -42,6 +43,7 @@ class sqLite():
             v.execute("CREATE TABLE descarga (fecha VARCHAR(6))")
             v.execute("INSERT INTO descarga (fecha) values ('191230')") 
         v.close()
+        settings = QSettings("/home/pi/innobusmx/settings.ini", QSettings.IniFormat)
 
         c = self.dbAforo.cursor()
         c.execute("PRAGMA table_info(csn)")
@@ -57,6 +59,7 @@ class sqLite():
             os.system('sudo cp /home/pi/innobusmx/data/img/imgTarjetas/ES.jpg  /home/pi/innobusmx/data/img/imgTarjetas/ME.jpg')
             os.system('sudo cp /home/pi/innobusmx/data/img/imgTarjetas/ES.jpg  /home/pi/innobusmx/data/img/imgTarjetas/PR.jpg')
             os.system('sudo cp /home/pi/innobusmx/data/img/imgTarjetas/ES.jpg  /home/pi/innobusmx/data/img/imgTarjetas/SA.jpg')
+            settings.setValue("apagado_forzado",1)
             python = sys.executable
             os.execl(python, python, * sys.argv)
         else:

@@ -10,6 +10,8 @@ import datetime
 #from ClMifare import clMifare
 import RPi.GPIO as GPIO
 #from ClSMS import clSMS
+import variables_globales as vg
+from alttusDB import insertar_estadisticas_alttus
 
 class clSerial(QtCore.QThread):
     sPort = '/dev/ttyUSB_1'
@@ -72,7 +74,8 @@ class clSerial(QtCore.QThread):
                 print 'Modem 3G ------ OK *********************'
                 break
             #else:
-            except:
+            except Exception, e:
+                print "\x1b[1;31;47m"+"No se pudo abrir el puerto 3G: " + str(e)+"\033[0;m"
                 #print 'Modem 3G ------ waitting 1 sec *********************'
                 time.sleep(1)
 
@@ -97,7 +100,8 @@ class clSerial(QtCore.QThread):
                 self.ser3G.write(cmd.encode())
                 break
             #else:
-            except:
+            except Exception, e:
+                print "\x1b[1;31;47m"+"No se pudo escribir en el puerto 3G: " + str(e)+"\033[0;m"
                 self.printDebug(self.parent.RED+self.parent.REVERSE+'###      ERROR: Write3G        ###'+self.parent.RESET)
                 time.sleep(1)
                 self.open3G()
@@ -108,7 +112,9 @@ class clSerial(QtCore.QThread):
             st = self.ser3G.readline()
             self.parent.rdy = ((st.find("RDY") != -1) or (st.find("+PACSP1") != -1) or (st == "AT+")) or self.parent.rdy
         #else:
-        except:
+        except Exception, e:
+            vg.modem_reiniciado = True
+            print "\x1b[1;31;47m"+"No se pudo leer el puerto 3G: " + str(e)+"\033[0;m"
             self.printDebug(self.parent.RED+self.parent.REVERSE+'###      ERROR: Readln3G        ###'+self.parent.RESET)
             time.sleep(1)
             self.open3G()
@@ -308,6 +314,10 @@ class clSerial(QtCore.QThread):
         self.parent.lblNS.setText("NS:"+self.parent.serialNumber)
         self.parent.lblNSFirmware.setText(self.parent.version+"   "+self.parent.cpuSerial)
         self.parent.lblError.setText("")
+        fecha_actual = datetime.date.today()
+        hora_actual = datetime.datetime.now().time()
+        insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "NST", str(self.parent.serialNumber)) # Numero de serie de tablilla
+        insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "VT", str(self.parent.version)) # Version de la tablilla
 
         c = self.clDB.dbListaNegra.cursor()
         c.execute("SELECT csn FROM csn where csn = '"+self.parent.serialNumber+"'")

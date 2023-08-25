@@ -17,6 +17,12 @@ import sys
 import subprocess
 import math
 import RPi.GPIO as GPIO
+import variables_globales as vg
+from PyQt4.QtCore import QSettings
+
+from alttusDB import obtener_estado_de_todas_las_ventas_no_enviadas, actualizar_estado_aforo_mipase_check_servidor, obtener_estadisticas_no_enviadas, actualizar_estado_estadistica_check_servidor, insertar_estadisticas_alttus, actualizar_estado_hora_check_hecho, obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_por_defecto
+from tarjetasDB import obtener_tarjeta_mipase_por_UID
+import FTPAlttus
 
 class clQuectel(QtCore.QThread):
 # Constantes
@@ -87,6 +93,7 @@ class clQuectel(QtCore.QThread):
         self.iMax = 0
         self.clbarras = clbarras
         self.parent.stBoton = ""
+        self.settings = QSettings("/home/pi/innobusmx/settings.ini", QSettings.IniFormat)
         #if True:
         try:
             c = self.clDB.dbAforo.cursor()
@@ -240,7 +247,7 @@ class clQuectel(QtCore.QThread):
             print "Error al leer vigencias"
 
     def printDebug(self,msg):
-        return
+        #return
         print datetime.datetime.now().strftime("%H:%M:%S"), msg
 
     def run(self):
@@ -644,9 +651,656 @@ class clQuectel(QtCore.QThread):
                     stB = "p,"+str(self.clDB.idTransportista)+","+str(self.clDB.idUnidad)+",11,PC GPS - "+st+" ,"+str(self.parent.csn)+",0,0,0,"+str(fecha)+","+str(fecha)
                     self.clDB.envio(1,stB)
                     self.parent.flSendEnvio = True
+                    
+                    
+            ##################### ERNESTO LOMAR #####################
+            try:
+                datos_enviados_azure = False
+                
+                ####### VERIFICAR SI HAY AFOROS PENDIENTES POR ENVIAR #######
+                aforos_pendientes_mipase = obtener_estado_de_todas_las_ventas_no_enviadas()
+                if len(aforos_pendientes_mipase) > 0:
+                    #self.settings.setValue("mandando_datos",1)
+                    self.enviar_aforos_mipase()
+                    datos_enviados_azure = True
+                    #self.settings.setValue("mandando_datos",0)
+                else:
+                    print "Sin aforos mipase pendientes de enviar a Azure"
+                ############################################################
+                    
+                ####### VERIFICAR SI HAY ESTADISTICAS PENDIENTES POR ENVIAR #######
+                estadisticas_pendientes =obtener_estadisticas_no_enviadas()
+                if len(estadisticas_pendientes) > 0:
+                    #self.settings.setValue("mandando_datos",1)
+                    self.enviar_estadisticas_azure()
+                    datos_enviados_azure = True
+                    #self.settings.setValue("mandando_datos",0)
+                else:
+                    print "Sin estadisticas mipase pendientes de enviar a Azure"
+                
+                ############################################################
+                
+                ####### VERIFICAR SI ESTA EN EL RANGO DE LAS 04:37:00-04:40:00 #######
+                hora_actual = datetime.datetime.now().time()
+                if int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  >= 43700 and int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  <= 44000:
+                    self.parent.crear_tramas9()
+                    FTPAlttus.main(self.serial)
+                    datos_enviados_azure = True
+                ############################################################
+                
+                ####### VERIFICAR SI SE TIENE QUE ASIGNAR LA CONEXION CON CYTIBUS #######
+                if datos_enviados_azure:
+                    datos_enviados_azure = False
+                    self.reAsignarConexionCytibus()
+                ############################################################
+                
+                ####### VERIFICAR SI SE PUEEDE ENVIAR LA TRAMA ACT #######
+                obtener_todas_las_horasdb = obtener_estado_de_todas_las_horas_no_hechas()
+                for i in xrange(len(obtener_todas_las_horasdb)):
+                    hora_iteracion = obtener_todas_las_horasdb[i]
+                    hora_actual = datetime.datetime.now().time()
+                    if int(str(hora_actual.strftime("%H:%M:%S")).replace(":","")) >= int(str(hora_iteracion[1]).replace(":","")):
+                        hecho = actualizar_estado_hora_check_hecho("Ok", hora_iteracion[0])
+                        if hecho:
+                            print "Ya se actualizo la hora check en servidor de: " + str(hora_iteracion)
+                            fecha_actual = datetime.date.today()
+                            insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "ACT", "") # Solicitar actualizacion
+                ############################################################
+                
+                ####### VERIFICAR SI HAY QUE PONER POR DEFECTO LA BASE DE DATOS HORAS #######
+                if int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  >= 235959 and int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  <= 1000:
+                    hecho_horas = actualizar_estado_hora_por_defecto()
+                    intentos_cambiar = 0
+                    if not hecho_horas:
+                        while not hecho_horas or intentos_cambiar <= 5:
+                            hecho_horas = actualizar_estado_hora_por_defecto()
+                            intentos_cambiar += 1
+                        if hecho_horas:
+                            print "Se actualizaron las BD horas a por defecto"
+                        else:
+                            print "No se actualizaron las BD horas a por defecto"
+                ############################################################
+                
+            except Exception, e:
+                print "\x1b[1;31;47m"+"Fallo codigo de verificacion de datos pendientes."+"\033[0;m"
+            ##################### ERNESTO LOMAR #####################
             time.sleep(1)
+    
+    ##################### ERNESTO LOMAR #####################
+
+    def inicializar_configuraciones_quectel(self):
+        ###########################
+        ######   Ernesto   ########
+        ###########################
+        
+        try:
+            ########## QICLOSE #########
+
+            comando = "AT+QICLOSE=1\r\n"
+            print self.serial.readln3G()
+            self.serial.write3G(comando)
+            i = 0
+            print "Comando: AT+QICLOSE=1"
+            
+            while True:
+                res = self.serial.readln3G()
+                print "res es: " + str(res)
+                i = i + 1
+                time.sleep(1)
+                if 'OK' in res:
+                    break
+                elif i == 5:
+                    print "\x1b[1;33m"+"No se pudo inicializar AT+QICLOSE=1"
+                    time.sleep(1)
+                    break
+                    #return False
+            print "\x1b[1;32m"+"#####################################"
+            
+            ##########################
+        except Exception, e:
+            print "\x1b[1;31;47m"+"Error al ejecutar QICLOSE: "+str(e)+'\033[0;m'
+            return False
+        
+        try:
+            ########## QIDEACT #########
+
+            comando = "AT+QIDEACT=1\r\n"
+            print self.serial.readln3G()
+            self.serial.write3G(comando)
+            i = 0
+            print "Comando: AT+QIDEACT=1"
+            
+            while True:
+                res = self.serial.readln3G()
+                print "res es: " + str(res)
+                i = i + 1
+                time.sleep(1)
+                if 'OK' in res:
+                    break
+                elif i == 5:
+                    print "\x1b[1;33m"+"No se pudo inicializar AT+QIDEACT=1"
+                    time.sleep(1)
+                    break
+                    #return False
+            print "\x1b[1;32m"+"#####################################"
+            
+            ##########################
+        except Exception, e:
+            print "\x1b[1;31;47m"+"Error al ejecutar QIDEACT: "+str(e)+'\033[0;m'
+            return False
+        
+        try:
+            ########## QICSGP #########
+            
+            comando = "AT+QICSGP=1,1,\"internet.itelcel.com\",\"\",\"\",0\r\n"
+            print self.serial.readln3G()
+            self.serial.write3G(comando)
+            i = 0
+            print "Comando: AT+QICSGP"
+            
+            while True:
+                res = self.serial.readln3G()
+                print "res es: " + str(res)
+                i = i + 1
+                time.sleep(1)
+                if 'OK' in res:
+                    break
+                elif i == 5:
+                    print "\x1b[1;33m"+"No se pudo inicializar AT+QICSGP=1"
+                    time.sleep(1)
+                    break
+                    #return False
+            print "\x1b[1;32m"+"#####################################"
+            
+            ##########################
+        except Exception, e:
+            print "\x1b[1;31;47m"+"Error al ejecutar QICSDGP: "+str(e)+'\033[0;m'
+            return False
+        
+        try:
+            ########## QIACT #########
+
+            comando = "AT+QIACT=1\r\n"
+            print self.serial.readln3G()
+            self.serial.write3G(comando)
+            i = 0
+            print "Comando: AT+QIACT"
+            
+            while True:
+                res = self.serial.readln3G()
+                print "res es: " + str(res)
+                i = i + 1
+                time.sleep(1)
+                if 'OK' in res:
+                    break
+                elif i == 5:
+                    print "\x1b[1;33m"+"No se pudo inicializar AT+QIACT=1"
+                    time.sleep(1)
+                    break
+                    #return False
+            print "\x1b[1;32m"+"#####################################"
+            
+            ##########################
+            
+            return True
+        except Exception, e:
+            print "\x1b[1;31;47m"+"Error al ejecutar QIACT: "+str(e)+'\033[0;m'
+            return False
+        
+    def abrir_puerto(self):
+        try:
+            time.sleep(0.0001)
+            time.sleep(0.0001)
+            # variables de prueba
+            tcp = "\"TCP\""
+            # identifica el envio por tcp
+            ip = "\"20.106.77.209\""
+            puerto_socket = "8300"
+            # ip publica o URL del servidor
+            #print("qi open")
+            # comando at, formato de envio, direciion ip o url, puerto del servidor, puerto por defecto del quectel, parametro de envio por push
+            comando = "AT+QIOPEN=1,0,"+tcp+","+ip+","+puerto_socket+",0,1\r\n"
+            self.serial.write3G(comando)
+            i = 0
+            print "Comando: AT+QIOPEN"
+            
+            while True:
+                res = self.serial.readln3G()
+                print "res es: " + str(res)
+                i = i + 1
+                time.sleep(1)
+                if 'OK' in res:
+                    break
+                elif i == 5:
+                    print "\x1b[1;33m"+"No se pudo inicializar AT+QIOPEN"
+                    time.sleep(1)
+                    break
+            print "\x1b[1;32m"+"#####################################"
+            
+            '''print self.serial.readln3G()
+            Aux = self.serial.readln3G()
+            print Aux.decode()
+            if "ERROR" in str(Aux.decode()):
+                self.serial.readln3G()
+                self.serial.readln3G()
+                return False
+            self.serial.readln3G()
+            self.serial.readln3G()'''
+            return True
+        except Exception, e:
+            print "\x1b[1;31;47m"+"comand.py, linea 180: "+str(e)+'\033[0;m'
+            return False
+            
+    def mandar_datos(self,Trama):
+        try:
+            self.parent.waitting = True
+            time.sleep(0.0001)
+            self.parent.sendData = True
+            byte = len(Trama)
+            comando = "AT+QISEND=0,"+str(byte)+"\r\n"
+            self.serial.write3G(comando)
+            print "Comando: AT+QISEND"
+            i = 0
+            j = 0
+            while True:
+                i = i+1
+                Aux = self.serial.readln3G()
+                resultado = Aux.decode()
+                if '>' in resultado:
+                    # Mando los datos
+                    print "> encontrado"
+                    time.sleep(0.0001)
+                    self.serial.write3G(Trama.encode())
+                    while True:
+                        Aux = self.serial.readln3G()
+                        resultado = Aux.decode()
+                        j = j+1
+                        if 'OK' in resultado:
+                            print "\x1b[1;32m"+"Se envio correctamente el dato con SEND OK"
+                            print "\x1b[1;32m"+str(Aux.decode())
+                            break
+                        elif 'ERROR' in resultado or 'FAIL' in resultado or j == 20:
+                            print "\x1b[1;33m"+"La trama no se pudo enviar: "+str(resultado)
+                            return {
+                                "enviado": False,
+                                "accion": "error"
+                            }
+                    break
+                elif 'ERROR' in resultado or i == 20:
+                    print "\x1b[1;33m"+"Error al ejecutar el comando AT+QISEND"
+                    print "\x1b[1;33m"+str(Aux.decode())
+                    return {
+                        "enviado": False,
+                        "accion": "error"
+                    }
+
+            if Trama == "quit":
+                #variables_globales.conexion_servidor = "SI"
+                return {
+                    "enviado": True,
+                    "accion": "error"
+                }
+            # recibir datos del servidor
+            time.sleep(0.0001)
+            #comando = "AT+QIRD=0,300\r\n"
+            #self.serial.write3G(comando.encode())
+            i = 0
+            print "\x1b[1;32m"+"Esperando respuesta del servidor..."
+            while True:
+                Aux = self.serial.readln3G()
+                resultado = Aux.decode()
+                print "\x1b[1;32m"+"Leyendo: "+str(resultado)
+                i = i+1
+                if 'QIURC:' in resultado or 'RC' in resultado or 'IURC' in resultado or "recv" in resultado:
+                    pass
+                elif 'TrEm' in resultado or 'ErTr' in resultado or 'EmEr' in resultado:
+                    print "\x1b[1;31;47m"+"La trama llego mal al servidor"+"\033[0;m"
+                    self.parent.flAlttus = False
+                    return {
+                        "enviado": False,
+                        "accion": "error"
+                    }
+                else:
+                    if (Aux != b'\r\n' and Aux != b'') and ("SKT" in Aux):
+                        print "\x1b[1;32m"+"Dato registrado en el servidor"
+                        print "\x1b[1;32m"+"Respondio: "+resultado
+                        self.parent.flAlttus = True
+                        return {
+                            "enviado": True,
+                            "accion": resultado
+                        }
+                if i == 20:
+                    print "\x1b[1;31;47m"+"Se terminaron los intentos de espera..."+"\033[0;m"
+                    self.parent.flAlttus = False
+                    return {
+                        "enviado": False,
+                        "accion": "error"
+                    }
+        except Exception, e:
+            print "\x1b[1;31;47m"+"comand.py, linea 238: "+str(e)+'\033[0;m'
+            
+    def cerrar_socket(self):
+        try:
+            #self.mandar_datos('quit')
+            time.sleep(0.001)
+            comando = "AT+QICLOSE=1\r\n"  # cierra conexion con el servidor - Modificado de "AT+QICLOSE=0\r\n" a "AT+QICLOSE=1\r\n"
+            self.serial.write3G(comando)
+            print self.serial.readln3G()
+            Aux = self.serial.readln3G()
+            print Aux.decode()
+        except Exception, e:
+            print "comand.py, linea 251: "+str(e)
+            
+    def reiniciar_configuracion_quectel(self):
+        try:
+            time.sleep(0.001)
+            comando = "AT+QIDEACT=1\r\n"
+            self.serial.write3G(comando)
+            print self.serial.readln3G()
+            Aux = self.serial.readln3G()
+            print Aux.decode()
+            self.inicializar_configuraciones_quectel()
+        except Exception, e:
+            print "\x1b[1;31;47m"+"comand.py, linea 251: "+str(e)+'\033[0;m'
+    
+    def reAsignarConexionCytibus(self):
+        
+        try:
+            self.parent.sendData = False
+            self.parent.waitting = False
+            ########## AT+QICLOSE #########
+            
+            comando = "AT+QICLOSE=1\r\n"
+            print self.serial.readln3G()
+            self.serial.write3G(comando)
+            i = 0
+            print "Comando: AT+QICLOSE"
+            
+            while True:
+                res = self.serial.readln3G()
+                print "res es: " + str(res)
+                i = i + 1
+                time.sleep(1)
+                if 'OK' in res:
+                    break
+                elif i == 5:
+                    print "\x1b[1;33m"+"No se pudo inicializar AT+QICLOSE=1"
+                    time.sleep(1)
+                    break
+                    #return False
+            print "\x1b[1;32m"+"#####################################"
+            
+            ##########################
+        except Exception, e:
+            print "\x1b[1;31;47m"+"Error al ejecutar AT+QICLOSE: "+str(e)+'\033[0;m'
+            return False
+        
+        try:
+            ########## AT+QIDEACT #########
+            
+            comando = "AT+QIDEACT=1\r\n"
+            print self.serial.readln3G()
+            self.serial.write3G(comando)
+            i = 0
+            print "Comando: AT+QIDEACT"
+            
+            while True:
+                res = self.serial.readln3G()
+                print "res es: " + str(res)
+                i = i + 1
+                time.sleep(1)
+                if 'OK' in res:
+                    break
+                elif i == 5:
+                    print "\x1b[1;33m"+"No se pudo inicializar AT+QIDEACT"
+                    time.sleep(1)
+                    break
+                    #return False
+            print "\x1b[1;32m"+"#####################################"
+            
+            ##########################
+        except Exception, e:
+            print "\x1b[1;31;47m"+"Error al ejecutar AT+QIDEACT: "+str(e)+'\033[0;m'
+            return False
+        
+        try:
+            ########## QICSGP #########
+            
+            comando = 'AT+QICSGP=1,1,"%s","%s","%s",1\r\n' % (self.clDB.urlAPN, self.clDB.userAPN, self.clDB.pwdAPN)
+            print self.serial.readln3G()
+            self.serial.write3G(comando)
+            i = 0
+            print "Comando: AT+QICSGP Cytibus"
+            
+            while True:
+                res = self.serial.readln3G()
+                print "res es: " + str(res)
+                i = i + 1
+                time.sleep(1)
+                if 'OK' in res:
+                    break
+                elif i == 5:
+                    print "\x1b[1;33m"+"No se pudo inicializar AT+QICSGP Cytibus"
+                    time.sleep(1)
+                    break
+                    #return False
+            print "\x1b[1;32m"+"#####################################"
+            
+            ##########################
+        except Exception, e:
+            print "\x1b[1;31;47m"+"Error al ejecutar QICSDGP Cytibus: "+str(e)+'\033[0;m'
+            return False
+    
+    def enviar_aforos_mipase(self):
+        try:
+            aforos_pendientes_mipase = obtener_estado_de_todas_las_ventas_no_enviadas()
+            if len(aforos_pendientes_mipase) > 0:
+                print "\x1b[1;33m"+"Existen aforos de mi pase penientes por enviar.."
+                configuracion_realizada = False
+                abrir_puerto_azure = False
+                intentos = 0
+                intentos_enviar_aforos = 0
+                while intentos_enviar_aforos <= 2:
+                    print "\x1b[1;32m"+"¨Se iniciaran las configuraciones del quectel"
+                    while configuracion_realizada != True or intentos <= 3:
+                        configuracion_realizada = self.inicializar_configuraciones_quectel()
+                        if configuracion_realizada:
+                            print "\x1b[1;32m"+"Se configuro el quectel"
+                            intentos = 0
+                            break
+                        intentos += 1
+                    if configuracion_realizada:
+                        print "\x1b[1;32m"+"Se abrira el puerto"
+                        while abrir_puerto_azure != False or intentos <= 3:
+                            abrir_puerto_azure = self.abrir_puerto()
+                            if abrir_puerto_azure:
+                                print "\x1b[1;32m"+"Se abrio el puerto para enviar datos a Azure"
+                                intentos = 0
+                                break
+                            intentos += 1
+                    else:
+                        print "\x1b[1;33m"+"No se pudo configurar el quectel"
+                        continue
+                    if abrir_puerto_azure:
+                        aforo_enviado = False
+                        uid_aforo = ""
+                        costo_aforo = ""
+                        fecha_aforo = ""
+                        hora_aforo = ""
+                        print "\x1b[1;32m"+"Se van a enviar datos a Azure"
+                        for i in xrange(5):
+                            aforo = obtener_estado_de_todas_las_ventas_no_enviadas()
+                            if len(aforo) > 0:
+                                print "\x1b[1;32m"+"Se encontro este aforo" + str(aforo)
+                                id_aforo = str(aforo[0][0])
+                                uid_aforo = str(aforo[0][1])
+                                costo_aforo = str(aforo[0][2])
+                                fecha_aforo = str(aforo[0][3])
+                                hora_aforo = str(aforo[0][4])
+                                latitud_aforo = str(aforo[0][5])
+                                longitud_aforo = str(aforo[0][6])
+                                transportista_aforo = str(aforo[0][7])
+                                num_economico_aforo = str(aforo[0][8])
+                                
+                                lblanca_o_lnegra = obtener_tarjeta_mipase_por_UID(uid_aforo)[1]
+                                
+                                if lblanca_o_lnegra:
+                                    trama = "[5,"+id_aforo+","+num_economico_aforo+","+transportista_aforo+","+uid_aforo+","+str(fecha_aforo.replace("-","")[3:]+hora_aforo.replace(":",""))+","+latitud_aforo+","+longitud_aforo+"]"
+                                else:
+                                    trama = "[5,B,"+num_economico_aforo+","+transportista_aforo+","+uid_aforo+","+str(fecha_aforo.replace("-","")[3:]+hora_aforo.replace(":",""))+","+latitud_aforo+","+longitud_aforo+"]"
+                                
+                                print "\x1b[1;32m"+"Aforo a enviar: " + str(trama)
+                                enviado = self.mandar_datos(trama)
+                                aforo_enviado = enviado['enviado']
+                                respuesta_aforo = enviado['accion']
+                                aforo_actualizado_db = False
+                                if aforo_enviado:
+                                    print "\x1b[1;32m"+"La respuesta de Azure es: " + str(respuesta_aforo)
+                                    while aforo_actualizado_db != False or intentos <= 3:
+                                        aforo_actualizado_db = actualizar_estado_aforo_mipase_check_servidor("OK", id_aforo)
+                                        intentos += 1
+                                        if aforo_actualizado_db or intentos >= 3:
+                                            intentos = 0
+                                            break
+                                    if aforo_actualizado_db:
+                                        intentos = 0
+                                        print "\x1b[1;32m"+"Aforo enviado registrado en BD"
+                                    else:
+                                        print "\x1b[1;33m"+"No se actualizo el aforo en la base de datos"
+                                    self.realizar_accion(enviado)
+                                else:
+                                    print "\x1b[1;31;47m"+"El aforo no pudo ser enviado"+"\033[0;m"
+                            else:
+                                break
+                        break
+                    else:
+                        print "\x1b[1;33m"+"No se pudo abrir el puerto de Azure"
+                    intentos_enviar_aforos += 1
+            else:
+                print "\x1b[1;32m"+"Sin aforos pendientes de Azure"
+        except Exception, e:
+            print "\x1b[1;31;47m"+"Fallo el metodo de enviar aforo: "+str(e)+"\033[0;m"
+            
+    def enviar_estadisticas_azure(self):
+        try:
+            estadisticas_pendientes_mipase = obtener_estadisticas_no_enviadas()
+            if len(estadisticas_pendientes_mipase) > 0:
+                print "\x1b[1;33m"+"Existen estadisticas de mi pase penientes por enviar.."
+                configuracion_realizada = False
+                abrir_puerto_azure = False
+                intentos = 0
+                intentos_enviar_estadisticas = 0
+                while intentos_enviar_estadisticas <= 2:
+                    print "\x1b[1;32m"+"¨Se iniciaran las configuraciones del quectel"
+                    while configuracion_realizada != True or intentos <= 3:
+                        configuracion_realizada = self.inicializar_configuraciones_quectel()
+                        if configuracion_realizada:
+                            print "\x1b[1;32m"+"Se configuro el quectel"
+                            intentos = 0
+                            break
+                        intentos += 1
+                    if configuracion_realizada:
+                        print "\x1b[1;32m"+"Se abrira el puerto"
+                        while abrir_puerto_azure != False or intentos <= 3:
+                            abrir_puerto_azure = self.abrir_puerto()
+                            if abrir_puerto_azure:
+                                print "\x1b[1;32m"+"Se abrio el puerto para enviar datos a Azure"
+                                intentos = 0
+                                break
+                            intentos += 1
+                    else:
+                        print "\x1b[1;33m"+"No se pudo configurar el quectel"
+                        continue
+                    if abrir_puerto_azure:
+                        estadistica_enviada = False
+                        id_estadistica = ""
+                        unidad_estadistica = ""
+                        transportista_estadistica = ""
+                        fecha_estadistica = ""
+                        hora_estadistica = ""
+                        columna_estadistica = ""
+                        valor_estadistica = ""
+                        print "\x1b[1;32m"+"Se van a enviar datos a Azure"
+                        for i in xrange(5):
+                            estadistica = obtener_estadisticas_no_enviadas()
+                            if len(estadistica) > 0:
+                                print "\x1b[1;32m"+"Se encontro esta estadistica" + str(estadistica)
+                                id_estadistica = str(estadistica[0][0])
+                                unidad_estadistica = str(estadistica[0][1])
+                                transportista_estadistica = str(estadistica[0][2])
+                                fecha_estadistica = str(estadistica[0][3])
+                                hora_estadistica = str(estadistica[0][4])
+                                columna_estadistica = str(estadistica[0][5])
+                                valor_estadistica = str(estadistica[0][6])
+                                
+                                if not "ACT" in str(columna_estadistica):
+                                    trama = "[9,"+str(unidad_estadistica)+","+str(transportista_estadistica)+","+str(fecha_estadistica.replace("-","")[3:]+hora_estadistica.replace(":",""))+","+str(columna_estadistica)+","+str(valor_estadistica)+"]"
+                                else:
+                                    trama = "[9,"+str(unidad_estadistica)+","+str(transportista_estadistica)+","+str(fecha_estadistica.replace("-","")[3:]+hora_estadistica.replace(":",""))+","+str(columna_estadistica)+"]"
+                                    
+                                print "\x1b[1;32m"+"Estadistica a enviar: " + str(trama)
+                                enviado = self.mandar_datos(trama)
+                                estadistica_enviada = enviado['enviado']
+                                respuesta_estadistica = enviado['accion']
+                                estadistica_actualizada_db = False
+                                if estadistica_enviada:
+                                    print "\x1b[1;32m"+"La respuesta de Azure es: " + str(respuesta_estadistica)
+                                    while estadistica_actualizada_db != False or intentos <= 3:
+                                        estadistica_actualizada_db = actualizar_estado_estadistica_check_servidor("OK", id_estadistica)
+                                        intentos += 1
+                                        if estadistica_actualizada_db or intentos >= 3:
+                                            intentos = 0
+                                            break
+                                    if estadistica_actualizada_db:
+                                        intentos = 0
+                                        print "\x1b[1;32m"+"Estadistica enviada registrada en BD"
+                                    else:
+                                        print "\x1b[1;33m"+"No se actualizo la estadistica en la base de datos"
+                                    self.realizar_accion(enviado)
+                                else:
+                                    print "\x1b[1;31;47m"+"La estadistica no pudo ser enviada"+"\033[0;m"
+                            else:
+                                break
+                        break
+                    else:
+                        print "\x1b[1;33m"+"No se pudo abrir el puerto de Azure"
+                    intentos_enviar_estadisticas += 1
+            else:
+                print "\x1b[1;32m"+"Sin estadisticas pendientes de Azure"
+        except Exception, e:
+            print "\x1b[1;31;47m"+"Fallo el metodo de enviar estadistica: "+str(e)+"\033[0;m"
+    
+    
+    def realizar_accion(self, result):
+        """
+        Si la clave "accion" esta en el diccionario de resultados del servidor, entonces el valor de la clave
+        "accion" se asigna a la variable accion. Si accion es igual a "APAGAR", entonces la raspberrry se
+        apaga. Si accion es igual a "REINICIAR", entonces se reinicia la raspberry. Si accion es igual a
+        "ACTUALIZAR", entonces se actualiza el raspberry
+        """
+        try:
+            if "accion" in result.keys():
+                accion = result['accion']
+                print "\x1b[1;32m"+"La accion a realizar es: " + str(accion)
+                if "C" in accion:
+                    try:
+                        datos = str(accion).replace("SKT:","").split(',')
+                        if len(datos) == 2:
+                            try:
+                                FTPAlttus.main(self.serial, datos[1])
+                            except Exception, e:
+                                print "\x1b[1;33m"+"No se pudo iniciar la actualizacion remota."
+                        else:
+                            print "\x1b[1;33m"+"El tamanio de datos de la letra C no son 2."
+                    except Exception, e:
+                        print "LeerMinicom.py, linea 239: "+str(e)
+        except Exception, e:
+            print "LeerMinicom.py, linea 255: "+str(e)
+    
+    ##################### ERNESTO LOMAR #####################
 
     def reInitApp(self):
+        self.settings.setValue("apagado_forzado",1)
         self.write3G(self.stReset3G)
         self.serial.closeRFID()
         self.serial.close3G()
@@ -843,6 +1497,11 @@ class clQuectel(QtCore.QThread):
                 j = stRead.find("+QCCID:")
                 self.printDebug('###                              ICCID OK ###')
                 self.parent.iccid = stRead[j+8:j+28]
+                fecha_actual = datetime.date.today()
+                hora_actual = datetime.datetime.now().time()
+                insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "SIM", str(self.parent.iccid)) # ID SIM
+                fecha_actual = ""
+                hora_actual = ""
             else:
                 self.parent.iccid = ""
                 self.printDebug('###                      ERROR LEER ICCID - NS DE LA SIM ###')
@@ -992,6 +1651,9 @@ class clQuectel(QtCore.QThread):
         self.parent.flRed = False
         self.printDebug('### CONEXION TCP                          ### ')
         if self.senial3G():
+            
+            self.reAsignarConexionCytibus()
+            
             cmd =  'AT+QIOPEN=1,0,"TCP","%s",%s,0,0\r' % (self.clDB.urlSocket, self.clDB.puertoSocket)
             stRead = self.write(cmd, ("QIOPEN:", "ERROR"), 1)                          #150seg
             if(stRead.find("QIOPEN: 0,0") != -1):
@@ -1356,6 +2018,7 @@ class clQuectel(QtCore.QThread):
                         self.printDebug("ERROR: Validador desconectado del Servidor.")
                         self.reInicializaTCP()                    
                 else:
+                    print "Se va a reiniciar el TCP."
                     self.reInicializaTCP()
             #elif (stRead.find("ERROR") != -1):
             #    self.reset()
@@ -1369,6 +2032,7 @@ class clQuectel(QtCore.QThread):
         result = ""
         self.parent.waitting = True
         if self.TCPStatus():
+            print "Ya se verifico el status de TCP."
             stRead = self.write('AT+QIRD=0\r', ("OK", "ERROR"), self.minAttempts)             #----
             self.parent.sendData = True
             stRead = self.write('AT+QISEND=0\r', ("ERROR", '>'), self.minAttempts)              #---

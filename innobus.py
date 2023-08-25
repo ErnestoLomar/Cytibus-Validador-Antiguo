@@ -4,6 +4,7 @@
 import sys
 from PyQt4 import QtGui
 from PyQt4 import QtCore
+from PyQt4.QtCore import QSettings
 import sqlite3
 import os
 import time
@@ -20,11 +21,13 @@ from ClSMS import clSMS
 from ClBarras import clBarras
 import RPi.GPIO as GPIO
 
+from alttusDB import insertar_estadisticas_alttus, obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_check_hecho, obtener_puerto_del_socket
+
 os.environ['DISPLAY'] = ":0"
 
 class mainWin(QtGui.QMainWindow):
 
-    stVersion = "v1.31h"
+    stVersion = "vA2.31h"
     flRFID = False
     updateFirmware = False
 
@@ -87,6 +90,7 @@ class mainWin(QtGui.QMainWindow):
         self.idRecorrido = 0
         self.stTurno = ""
         self.closeTV = False
+        self.settings = QSettings("/home/pi/innobusmx/settings.ini", QSettings.IniFormat)
 
         subprocess.call("xset dpms force on",shell=True)
         subprocess.call("xset dpms s off",shell=True)
@@ -194,7 +198,7 @@ class mainWin(QtGui.QMainWindow):
         self.noSocket = QtGui.QLabel(self)
         self.noSocket.setPixmap(QtGui.QPixmap("/home/pi/innobusmx/data/img/noSocket.png"))
         self.noSocket.setScaledContents(True)
-        self.noSocket.move(710,425)
+        self.noSocket.move(650,425)
         self.noSocket.resize(20, 20)
 
         self.noFTP = QtGui.QLabel(self)
@@ -206,13 +210,13 @@ class mainWin(QtGui.QMainWindow):
         self.noRDIF = QtGui.QLabel(self)
         self.noRDIF.setPixmap(QtGui.QPixmap("/home/pi/innobusmx/data/img/noRFID.Jpeg"))
         self.noRDIF.setScaledContents(True)
-        self.noRDIF.move(650,425)
+        self.noRDIF.move(620,425)
         self.noRDIF.resize(20, 20)
 
         self.noRed = QtGui.QLabel(self)
         self.noRed.setPixmap(QtGui.QPixmap("/home/pi/innobusmx/data/img/noRed.Jpeg"))
         self.noRed.setScaledContents(True)
-        self.noRed.move(620,425)
+        self.noRed.move(590,425)
         self.noRed.resize(20, 20)
 
         self.noSIM = QtGui.QLabel(self)
@@ -220,13 +224,23 @@ class mainWin(QtGui.QMainWindow):
         self.noSIM.setScaledContents(True)
         self.noSIM.move(550,425)
         self.noSIM.resize(32, 20)
+        ########## ERNESTO LOMAR ##########
+        self.noAlttus = QtGui.QLabel(self)
+        self.noAlttus.setPixmap(QtGui.QPixmap("/home/pi/innobusmx/data/img/alttusti.png"))
+        self.noAlttus.setScaledContents(True)
+        self.noAlttus.move(680,425)
+        self.noAlttus.resize(50, 20)
+        ###################################
 
         imgTarjetaAtras = "/home/pi/innobusmx/data/img/imgTarjetas/Cl.jpg"
         imgUsuarioTarjeta = "/home/pi/innobusmx/data/user/admin.Jpeg"
         
         self.flFTP = False
         self.flRed = False
-        self.flSocket = False
+        self.flSocket = False        
+        ########## ERNESTO LOMAR ##########
+        self.flAlttus  =False
+        ###################################
         self.flComm = True
         self.iComm = 0
         self.flRFID = False
@@ -827,6 +841,7 @@ class mainWin(QtGui.QMainWindow):
 	self.btnGpioGUI.show()
 
     def click_btnReinicio(self, event):
+        self.settings.setValue("apagado_forzado",1)
         python = sys.executable
         os.execl(python, python, * sys.argv)           
 
@@ -1496,6 +1511,80 @@ class mainWin(QtGui.QMainWindow):
         self.flTurno = False
         self.flVuelta = False
         self.TISC = ""
+    
+    def crear_tramas9(self):
+        try:
+            try:
+                fecha_actual = datetime.date.today()
+                hora_actual = datetime.datetime.now().time()
+                
+                version_raspberry = ""
+                
+                with open('/proc/device-tree/model', 'r') as f:
+                    model = f.read().strip()
+                    if 'Raspberry Pi' in model:
+                        version_raspberry = model.split('Raspberry Pi')[1].strip()
+
+                # Leer el archivo /proc/meminfo para obtener información sobre la memoria RAM
+                with open('/proc/meminfo', 'r') as f:
+                    meminfo = f.read()
+
+                # Extraer la cantidad de memoria RAM total y usada
+                total_ram = int(meminfo.split('MemTotal:')[1].split('kB')[0].strip()) * 1024
+                usada_ram = int(meminfo.split('MemAvailable:')[1].split('kB')[0].strip()) * 1024
+
+                # Ejecutar el comando 'df -h' y capturar la salida
+                df_output = subprocess.check_output(['df', '-h'])
+
+                # Convertir la salida a una lista de líneas de texto
+                df_lines = df_output.decode('utf-8').split('\n')
+
+                # Buscar la línea que contiene la información del sistema de archivos /
+                root_fs_line = None
+                for line in df_lines:
+                    if line.startswith('/dev/root'):
+                        root_fs_line = line
+                        break
+
+                # Obtener los campos de espacio total y usado de la línea del sistema de archivos /
+                if root_fs_line is not None:
+                    root_fs_fields = root_fs_line.split()
+                    total_rom = root_fs_fields[1]
+                    usada_rom = root_fs_fields[2]
+                else:
+                    total_rom = 'Unknown'
+                    usada_rom = 'Unknown'
+
+                # Convertir bytes a megabytes
+                total_ram_mb = total_ram / (1024 * 1024)
+                usada_ram_mb = usada_ram / (1024 * 1024)
+                
+            except Exception, e:
+                print e
+            
+            RAM = str(usada_ram_mb)[:6] + "/" + str(total_ram_mb)[:6]+"MB"
+            ROM = str(usada_rom) + "/" + str(total_rom)
+
+            process = subprocess.Popen("cat /sys/class/net/eth0/address", stdout=subprocess.PIPE, shell=True)
+            stdout, _ = process.communicate()
+            mac = stdout.decode().strip()  # Convierte la salida de bytes a una cadena
+            
+            puertoSocket = obtener_puerto_del_socket()
+            if puertoSocket is None:
+                puertoSocket = self.clDB.puertoSocket
+            else:
+                puertoSocket = self.clDB.puertoSocket + "/" + str(puertoSocket)
+            
+            insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "SW", str(self.stVersion)) # Version del software
+            insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "MAC", str(mac)) # MAC de raspberry
+            insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "SKT", str(puertoSocket)) # Socket
+            insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "VRPI", str(version_raspberry)) # Version raspberry
+            insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "RAM", str(RAM)) # RAM raspberry
+            insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "ROM", str(ROM)) # ROM raspberry
+            insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "APN", str(self.clDB.urlAPN)) # APN SIM
+            print "Tramas 9 creadas."
+        except Exception, e:
+            print "Fallo la creacion de las tramas 9 en innobus.py: " + str(e)
 
     def Operador(self):
         if self.imgOperador.isVisible():
@@ -1584,6 +1673,9 @@ class Screen():
         self.red = False
         self.ftp = False
         self.flR = True
+        ########## ERNESTO LOMAR ##########
+        self.fAl = False
+        ###################################
         self.rfid = not self.parent.flRFID
         self.clmodem = clmodem
         self.clmifare = clmifare
@@ -1613,7 +1705,18 @@ class Screen():
                 self.icomm = self.parent.iComm
         else:
             self.parent.no3G.setPixmap(QtGui.QPixmap("/home/pi/innobusmx/data/img/noUSB.jpg"))
-            
+        
+        ########## ERNESTO LOMAR ##########
+        if (self.parent.flAlttus):
+            self.parent.noAlttus.setPixmap(QtGui.QPixmap("/home/pi/innobusmx/data/img/alttusti.png"))
+        else:
+            if (self.fAl):
+                self.parent.noAlttus.setPixmap(QtGui.QPixmap("/home/pi/innobusmx/data/img/alttusti.png"))
+                self.fAl = False
+            else:
+                self.parent.noAlttus.setPixmap(QtGui.QPixmap(""))
+                self.fAl = True
+        ###################################   
 
         if (self.parent.flRFID != self.rfid):
             if (not self.parent.flRFID):
@@ -1791,6 +1894,7 @@ class Screen():
 
         now = int(time.time())
         if (now - int(self.parent.lastConnection) > 600):
+            self.parent.settings.setValue("apagado_forzado",1)
             python = sys.executable
             os.execl(python, python, * sys.argv)
         QtCore.QTimer.singleShot(1000, self.show)
@@ -1804,12 +1908,42 @@ def main():
     GPIO.output(8,GPIO.HIGH)
     GPIO.output(24,GPIO.HIGH)
     GPIO.setup(12,GPIO.IN)
-
+    
     time.sleep(3)    
     app = QtGui.QApplication(sys.argv)
 
     cldb = sqLite()
     ex = mainWin(cldb)
+    
+    ##################### ERNESTO LOMAR #####################
+    
+    try:
+        if not bool(int(ex.settings.value('apagado_forzado').toPyObject())):
+            
+            # Creacion de tramas 9
+            try:
+                ex.crear_tramas9()
+            except Exception, e:
+                print "Fallo la creacion de las tramas 9 en main: " + str(e)
+            
+            # Verificacion de hora actual en BD
+            try:
+                obtener_todas_las_horasdb = obtener_estado_de_todas_las_horas_no_hechas()
+                for i in xrange(len(obtener_todas_las_horasdb)):
+                    hora_iteracion = obtener_todas_las_horasdb[i]
+                    hora_actual = datetime.datetime.now().time()
+                    if int(str(hora_actual.strftime("%H:%M:%S")).replace(":","")) >= int(str(hora_iteracion[1]).replace(":","")):
+                        hecho = actualizar_estado_hora_check_hecho("Ok", hora_iteracion[0])
+                        if hecho:
+                            print "Se actualizo la hora"
+            except Exception, e:
+                print "No se pudo actualizar las horas db"
+        else:
+            ex.settings.setValue("apagado_forzado",0)
+    except Exception, e:
+        print "Fallo la creacion de tramas 9"
+        
+    #########################################################
 
     clserial = clSerial(ex, cldb)
     clserial.start()
