@@ -25,10 +25,7 @@ c = dbAforo.cursor()
 c.execute('SELECT idUnidad FROM parametros')
 data = c.fetchone()
 id_Unidad = str(data[0]) if data else "Sin datos"  # Manejar caso de no encontrar datos
-#print "id_Unidad es:", id_Unidad
 
-# Esperar 5 segundos
-#time.sleep(5)
 
 contador = 1
 nombre = ""
@@ -65,9 +62,9 @@ quectelUSB = ""
 def config_PDP():
     # Reiniciar SIM
     enviaComando("AT+QFUN=5")
-    time.sleep(5)
+    time.sleep(3)
     enviaComando("AT+QFUN=6")
-    time.sleep(5)
+    time.sleep(3)
 
     # Configurar PDP context
     resp = enviaComando("AT+QICSGP=1,1,\"internet.itelcel.com\",\"\",\"\",0")
@@ -213,14 +210,14 @@ def IniciarSesionFTP(servidor, tamanio):
             Aux = enviaComando(conexion_FTP_webhost)
             if "OK" in Aux:
                 print "Conexion exitosa a servidor webhost"
-                time.sleep(5)
+                time.sleep(3)
                 contador = 0
                 intentos_ftp = 0
                 return UbicarPathFTP("web", tamanio)
             else:
                 print "Reintentando conectar a servidor webhost..."
                 enviaComando("AT+QFTPCLOSE")
-                time.sleep(5)
+                time.sleep(3)
                 if contador >= 6:
                     print "No se pudo establecer la conexion con el servidor FTP [web]"
                     if intentos_actualizacion >= 3:
@@ -240,7 +237,7 @@ def IniciarSesionFTP(servidor, tamanio):
             Aux = enviaComando(conexion_FTP_azure, 10)
             if "OK" in Aux and "625" not in Aux:
                 print "Conexion exitosa a azure"
-                time.sleep(5)
+                time.sleep(3)
                 contador = 0
                 intentos_ftp = 0
                 return UbicarPathFTP("azure", tamanio)
@@ -249,7 +246,7 @@ def IniciarSesionFTP(servidor, tamanio):
                     print "Error Not logged in"
                 print "Reintentando conectar a servidor azure..."
                 enviaComando("AT+QFTPCLOSE")
-                time.sleep(5)
+                time.sleep(3)
                 if intentos_ftp >= 3:
                     print "No se pudo establecer la conexion con el servidor FTP [Azure]"
                     print "intentando conexion alternativa con servidor webhost"
@@ -315,7 +312,7 @@ def UbicarPathFTP(servidor, tamanio):
         # descarga archivo
         comando_descarga = 'AT+QFTPGET="%s.txt","UFS:%s.txt"\r\n' % (nombre, nombre)
         quectelUSB.write(comando_descarga)
-        time.sleep(5)  # Esperar unos segundos para que se complete la descarga
+        time.sleep(3)  # Esperar unos segundos para que se complete la descarga
         # print(quectelUSB.readline())
         Reintentar = "false"
         # Limpia buffer para no considerar echo de comando
@@ -372,10 +369,11 @@ def UbicarPathFTP(servidor, tamanio):
 
 
 def leerArchivo(servidor, tamanio):
-    try:
-        global nombre
-        i_AT=1
-        while i_AT <= 3:
+    
+    global nombre
+    i_AT=1
+    while i_AT <= 3:
+        try:
             print "Descargando archivo de quectel y generando txt / intento: %d" % i_AT
             archivo = '%s.txt' % nombre
             comando = 'AT+QFDWL="%s"\r\n' % archivo
@@ -452,35 +450,37 @@ def leerArchivo(servidor, tamanio):
                         print "El archivo txt creado es mayor por %d Bytes" % (tamanio_del_archivo - tamanio)
                     print "Borrando archivo txt y zip creados..."
                     subprocess.call('rm -rfv /home/pi/%s.txt' % nombre, shell=True)
-                    subprocess.call('rm -rfv /home/pi/update.zip' % nombre, shell=True)
+                    subprocess.call('rm -rfv /home/pi/update.zip', shell=True)
                     i_AT += 1
                     continue
                 
             else:
                 print "No se puede leer el tamano del archivo: %s.txt" % nombre
-            time.sleep(10)
-        
-        # Termina while
-        if intentos_actualizacion >= 3:
-            pass#Mandar Error [Error en descarga quectel - Raspberry]
-        return False
+            time.sleep(1)
+            return False
+        except Exception, e:
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            print "FTP.py,", exc_tb.tb_lineno, " Error al leer archivo: " + str(e)
+            if intentos_actualizacion >= 3:
+                pass#Mandar Error [Error en descarga quectel - Raspberry]
+                return False
+            i_AT += 1
+            continue
+    # Termina while
+    if intentos_actualizacion >= 3:
+        pass#Mandar Error [Error en descarga quectel - Raspberry]
+    return False
         
 
-    except Exception, e:
-        exc_type, exc_obj, exc_tb = sys.exc_info()
-        print "FTP.py,", exc_tb.tb_lineno, " Error al leer archivo: " + str(e)
-        if intentos_actualizacion >= 3:
-            pass#Mandar Error [Error en descarga quectel - Raspberry]
-        return False
-
+    
 
 def ActualizarArchivos(tamanio_esperado):
     global nombre, intentos_ftp, tipo
     time.sleep(1)
-    filename = 'update.zip'
+    filename = '/home/pi/update.zip'
 
-    if os.path.exists(filename):
-        try:
+    try:
+        if os.path.exists(filename):
             #-------------Alejandro Valencia Revision de peso de archivo zip descargado
             if os.path.exists('/home/pi/update.zip'):
                 tamanio_del_archivo = os.path.getsize('/home/pi/update.zip')
@@ -493,8 +493,8 @@ def ActualizarArchivos(tamanio_esperado):
             else:
                 print "No se puede leer el tamano del archivo: update.zip"
             
-            time.sleep(10)
-            
+            time.sleep(3)
+                
             print("Descomprimiendo...")
             subprocess.call('pwd', shell=True)
             subprocess.call('rm -rf /home/pi/update.txt', shell=True)
@@ -508,10 +508,10 @@ def ActualizarArchivos(tamanio_esperado):
             if os.path.exists("/home/pi/update/"):
                 subprocess.call('rm -rf /home/pi/update/', shell=True)
             
-            subprocess.call("unzip -o /home/pi/actualizacion/update.zip", shell=True)
-            time.sleep(5)
+            subprocess.call("unzip -o /home/pi/actualizacion/update.zip -d /home/pi/", shell=True)
+            time.sleep(3)
             print(".zip descomprimido")
-            
+                
             if os.path.exists("/home/pi/update/"):
                 print("Carpeta descomprimida: update")
                 print("Borrando zip...")
@@ -529,13 +529,13 @@ def ActualizarArchivos(tamanio_esperado):
                     subprocess.call('mv -f /home/pi/update/ /home/pi/%s/' % carpetaSoftware, shell=True)
                     print "Regresando archivos originales, manteniendo los actualizados..."
                     subprocess.call('cp -rn /home/pi/antigua/* /home/pi/%s/' % carpetaSoftware, shell=True)
-                    time.sleep(5)
+                    time.sleep(3)
                     print "Eliminando carpeta antigua..."
                     subprocess.call('sudo chmod -R a+rwx /home/pi/antigua/', shell=True)
                     subprocess.call('rm -rf /home/pi/antigua/', shell=True)
                     print "Dando permisos a carpeta %s" % carpetaSoftware
                     subprocess.call('sudo chmod -R a+rwx /home/pi/%s/' % carpetaSoftware, shell=True)
-                    
+                        
                 elif tipo == "Lista.db":
                     #Actualizacion de archivo especificos
                     print "Copiando archivos de update a %s" % carpetaSoftware
@@ -558,13 +558,13 @@ def ActualizarArchivos(tamanio_esperado):
 
                 if tipo == "Software":
                     subprocess.call("sudo reboot now", shell=True)
-                    
+                        
                 return True
-            
+                
             elif os.path.exists("/home/pi/tarjetas.db"):
                 print "No existe la carpeta descomprimida como /home/pi/update/"
                 print "Existe el archivo tarjetas.db"
-                time.sleep(5)
+                time.sleep(3)
                 subprocess.call('rm -rf /home/pi/actualizacion/update.zip', shell=True)
                 # Mueve el .db a su ubicacion necesaria y dando permisos a carpeta de software
                 subprocess.call('mv -v /home/pi/tarjetas.db /home/pi/' + carpetaSoftware + '/data/db/', shell=True)
@@ -594,16 +594,16 @@ def ActualizarArchivos(tamanio_esperado):
             if intentos_actualizacion >= 3:
                 pass#Mandar Error [No se encontro carpeta update ni archivo .db]
             return False
-        except Exception, e:
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            print "FTP.py,", str(exc_tb.tb_lineno) + str(e)
-            # Mandar Error
+        else:
+            print "No se encontró el archivo"
+            time.sleep(1)
+            if intentos_actualizacion >= 3:
+                pass#Mandar Error [No hay zip]
             return False
-    else:
-        print "No se encontró el archivo"
-        time.sleep(1)
-        if intentos_actualizacion >= 3:
-            pass#Mandar Error [No hay zip]
+    except Exception, e:
+        exc_type, exc_obj, exc_tb = sys.exc_info()
+        print "FTP.py,", str(exc_tb.tb_lineno) + str(e)
+        # Mandar Error
         return False
 
 
@@ -613,6 +613,7 @@ def cerrar_conexion_ftp():
         print "Conexion FTP cerrada."
     else:
         print "Error al cerrar la conexion FTP."
+
 
 #----------------------------------------------------------Main
 def main(objSerial,size = False):
