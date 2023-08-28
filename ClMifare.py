@@ -65,12 +65,12 @@ class clMifare(QtCore.QThread):
 
     def run(self):
         self.preaderLocal = self.ser.setupRFID()
-        tarjeta_de_mi_pase = False
         print '     Siempre leyendo aca'
         print '#############################'
         while(True):
             self.out = ''
             commOK = True
+            tarjeta_de_mi_pase = False
             #if True:
             try:
                 self.preaderLocal.flushInput()
