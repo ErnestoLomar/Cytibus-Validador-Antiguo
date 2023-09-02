@@ -20,7 +20,7 @@ import RPi.GPIO as GPIO
 import variables_globales as vg
 from PyQt4.QtCore import QSettings
 
-from alttusDB import obtener_estado_de_todas_las_ventas_no_enviadas, actualizar_estado_aforo_mipase_check_servidor, obtener_estadisticas_no_enviadas, actualizar_estado_estadistica_check_servidor, insertar_estadisticas_alttus, actualizar_estado_hora_check_hecho, obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_por_defecto
+from alttusDB import obtener_estado_de_todas_las_ventas_no_enviadas, actualizar_estado_aforo_mipase_check_servidor, obtener_estadisticas_no_enviadas, actualizar_estado_estadistica_check_servidor, insertar_estadisticas_alttus, actualizar_estado_hora_check_hecho, obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_por_defecto, obtener_ultima_ACT
 from tarjetasDB import obtener_tarjeta_mipase_por_UID
 import FTPAlttus
 
@@ -684,7 +684,7 @@ class clQuectel(QtCore.QThread):
                 hora_actual = datetime.datetime.now().time()
                 if int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  >= 43700 and int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  <= 44000:
                     self.parent.crear_tramas9()
-                    FTPAlttus.main(self.serial)
+                    FTPAlttus.main(self.serial, self.parent)
                     datos_enviados_azure = True
                 ############################################################
                 
@@ -708,7 +708,18 @@ class clQuectel(QtCore.QThread):
                 ############################################################
                 
                 ####### VERIFICAR SI HAY QUE PONER POR DEFECTO LA BASE DE DATOS HORAS #######
-                if int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  >= 235959 and int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  <= 1000:
+                
+                reiniciar_valores_por_defecto = False
+                if len(str(obtener_ultima_ACT())) > 2:
+                    fecha_str = obtener_ultima_ACT()[0][3]
+                    fecha_datetime = datetime.datetime.strptime(fecha_str, "%Y-%m-%d")
+                    if fecha_datetime.strftime("%Y-%m-%d") != datetime.date.today().strftime("%Y-%m-%d"):
+                        reiniciar_valores_por_defecto = True
+                        print "Es un dia diferente"
+                    else:
+                        print "Es el mismo dia"
+                
+                if int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  >= 235959 and int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  <= 1000 or reiniciar_valores_por_defecto:
                     hecho_horas = actualizar_estado_hora_por_defecto()
                     intentos_cambiar = 0
                     if not hecho_horas:
@@ -716,13 +727,15 @@ class clQuectel(QtCore.QThread):
                             hecho_horas = actualizar_estado_hora_por_defecto()
                             intentos_cambiar += 1
                         if hecho_horas:
+                            reiniciar_valores_por_defecto = False
                             print "Se actualizaron las BD horas a por defecto"
                         else:
+                            reiniciar_valores_por_defecto = True
                             print "No se actualizaron las BD horas a por defecto"
                 ############################################################
                 
             except Exception, e:
-                print "\x1b[1;31;47m"+"Fallo codigo de verificacion de datos pendientes."+"\033[0;m"
+                print "\x1b[1;31;47m"+"Fallo codigo de verificacion de datos pendientes."+str(e)+"\033[0;m"
             ##################### ERNESTO LOMAR #####################
             time.sleep(1)
     
@@ -893,6 +906,7 @@ class clQuectel(QtCore.QThread):
             
     def mandar_datos(self,Trama):
         try:
+            self.parent.lastConnection = time.time()
             self.parent.waitting = True
             time.sleep(0.0001)
             self.parent.sendData = True
@@ -1287,7 +1301,7 @@ class clQuectel(QtCore.QThread):
                         datos = str(accion).replace("SKT:","").split(',')
                         if len(datos) == 2:
                             try:
-                                FTPAlttus.main(self.serial, datos[1])
+                                FTPAlttus.main(self.serial, self.parent, datos[1])
                             except Exception, e:
                                 print "\x1b[1;33m"+"No se pudo iniciar la actualizacion remota."
                         else:

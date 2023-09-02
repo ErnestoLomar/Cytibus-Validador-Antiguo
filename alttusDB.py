@@ -1,4 +1,6 @@
 import sqlite3
+from datetime import datetime
+import time
 
 URI = "/home/pi/innobusmx/data/db/alttusti.db"
 
@@ -62,6 +64,45 @@ def actualizar_estado_aforo_mipase_check_servidor(estado, id):
     except Exception, e:
         print "Fallo al actualizar check_servidor aforo mipase: " + str(e)
         return False
+    
+def obtener_aforos_antiguos(fecha_limite):
+    try:
+        conexion = sqlite3.connect(URI)
+        cursor = conexion.cursor()
+        cursor.execute("SELECT * FROM aforos WHERE fecha >= '{}'".format(fecha_limite))
+        resultado = cursor.fetchall()
+        conexion.close()
+        return resultado
+    except Exception, e:
+        print "Fallo al obtener todos los aforos antiguos de mipase: " + str(e)
+        
+def eliminar_aforos_antiguos(fecha_limite):
+    try:
+        conexion = sqlite3.connect(URI)
+        cursor = conexion.cursor()
+        cursor.execute("DELETE FROM aforos WHERE fecha < '{}'".format(fecha_limite))
+        conexion.commit()
+        conexion.close()
+        return True
+    except Exception, e:
+        print "Fallo al eliminar aforos antiguos de mipase: " + str(e)
+        return False
+    
+def periodo_5Mins_MiPase(csn):
+        conexion = sqlite3.connect(URI)
+        cursor = conexion.cursor()
+        cursor.execute("SELECT fecha, hora FROM aforos WHERE UID = '{}' ORDER BY fecha DESC, hora DESC LIMIT 1".format(csn))
+        data = cursor.fetchone()
+        
+        if data is None:
+            conexion.close()
+            return True
+        else:
+            tsDel = datetime.strptime(data[0] + ' ' + data[1], '%Y-%m-%d %H:%M:%S')
+            tsAl = datetime.strptime(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), '%Y-%m-%d %H:%M:%S')
+            td = tsAl - tsDel
+            conexion.close()
+            return int(round(td.total_seconds() / 60)) > 5
 #crear_tabla_de_aforos()
 
 ##########################################################################################################
@@ -182,6 +223,41 @@ def actualizar_estado_estadistica_check_servidor(estado, id):
     except Exception, e:
         print "Fallo al actualizar check_servidor de estadisticas: " + str(e)
         return False
+    
+def obtener_estadisticas_antiguas(fecha_limite):
+    try:
+        conexion = sqlite3.connect(URI)
+        cursor = conexion.cursor()
+        cursor.execute("SELECT * FROM estadisticas WHERE fecha >= '{}'".format(fecha_limite))
+        resultado = cursor.fetchall()
+        conexion.close()
+        return resultado
+    except Exception, e:
+        print "Fallo al obtener todas las estadisticas antiguas de mipase: " + str(e)
+        
+def eliminar_estadisticas_antiguas(fecha_limite):
+    try:
+        conexion = sqlite3.connect(URI)
+        cursor = conexion.cursor()
+        cursor.execute("DELETE FROM estadisticas WHERE fecha < '{}'".format(fecha_limite))
+        conexion.commit()
+        conexion.close()
+        return True
+    except Exception, e:
+        print "Fallo al eliminar estadisticas antiguas de mipase: " + str(e)
+        return False
+    
+def obtener_ultima_ACT():
+    try:
+        conexion = sqlite3.connect(URI)
+        cursor = conexion.cursor()
+        cursor.execute("SELECT * FROM estadisticas WHERE columna_db = 'ACT' ORDER BY idMuestreo DESC LIMIT 1")
+        resultado = cursor.fetchall()
+        conexion.close()
+        return resultado
+    except Exception, e:
+        print "Fallo al obtener ultima estadistica ACT: " + str(e)
+    
 #crear_tabla_de_horas()v
 
 ##########################################################################################################

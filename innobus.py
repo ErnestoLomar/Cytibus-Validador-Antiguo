@@ -11,7 +11,6 @@ import time
 import datetime
 import traceback
 import subprocess
-import RPi.GPIO as GPIO
 
 from ClSerial import clSerial
 from ClModem import clQuectel
@@ -21,7 +20,7 @@ from ClSMS import clSMS
 from ClBarras import clBarras
 import RPi.GPIO as GPIO
 
-from alttusDB import insertar_estadisticas_alttus, obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_check_hecho, obtener_puerto_del_socket
+from alttusDB import insertar_estadisticas_alttus, obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_check_hecho, obtener_puerto_del_socket, eliminar_aforos_antiguos, eliminar_estadisticas_antiguas
 
 os.environ['DISPLAY'] = ":0"
 
@@ -1569,7 +1568,7 @@ class mainWin(QtGui.QMainWindow):
             stdout, _ = process.communicate()
             mac = stdout.decode().strip()  # Convierte la salida de bytes a una cadena
             
-            puertoSocket = obtener_puerto_del_socket()
+            puertoSocket = str(obtener_puerto_del_socket()).replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",","")
             if puertoSocket is None:
                 puertoSocket = self.clDB.puertoSocket
             else:
@@ -1585,6 +1584,53 @@ class mainWin(QtGui.QMainWindow):
             print "Tramas 9 creadas."
         except Exception, e:
             print "Fallo la creacion de las tramas 9 en innobus.py: " + str(e)
+            
+    def eliminarDatosAntiguos(self):
+        print "\n"
+        print "################################################"
+        print "Se procedera a revisar las bases de datos"
+        try:
+            fecha_ahora = datetime.datetime.utcnow()
+            print "Hoy es "+str(fecha_ahora)
+            fecha_antigua = fecha_ahora - datetime.timedelta(days=15)
+            print "Hace 15 días fue "+str(fecha_antigua)
+            fecha_limite = fecha_antigua.strftime('%Y-%m-%d')
+            print "La fecha hace 15 días es "+str(fecha_limite)
+            
+            eliminado_estadisticas_db = False
+            eliminado_ventas_db = False
+            
+            try:
+                
+                eliminado_ventas_db = eliminar_aforos_antiguos(fecha_limite)
+                if eliminado_ventas_db:
+                    print "Aforos verificados, se eliminaron registros antiguos"
+                else:
+                    print "No se eliminaron registros de aforos"
+            except Exception, e:
+                print "Error al verificar los tickets: "+str(e)
+                    
+            time.sleep(0.10)
+            
+            try:
+                
+                eliminado_estadisticas_db = eliminar_estadisticas_antiguas(fecha_limite)
+                if eliminado_estadisticas_db:
+                    print "Estadisticas verificadas, se eliminaron registros antiguos"
+                else:
+                    print "No se eliminaron registros de estadisticas"
+            except Exception, e:
+                print "Error al verificar las estadisticas: "+str(e)
+                    
+            time.sleep(0.10)
+            
+            print "Se terminó de verificar las bases de datos"
+            print "################################################"
+            print "\n"
+        except Exception, e:
+                print "Ocurrió un error al verificar las bases de datos: ", e
+                time.sleep(0.10)
+                print "################################################"
 
     def Operador(self):
         if self.imgOperador.isVisible():
@@ -1938,6 +1984,11 @@ def main():
                             print "Se actualizo la hora"
             except Exception, e:
                 print "No se pudo actualizar las horas db"
+                
+            try:
+                ex.eliminarDatosAntiguos()
+            except Exception, e:
+                print "Fallo la eliminacion de datos antiguos: " + str(e)
         else:
             ex.settings.setValue("apagado_forzado",0)
     except Exception, e:

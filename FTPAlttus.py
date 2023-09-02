@@ -4,18 +4,14 @@
 Pruebas de FTP - Funcionamiento: PRuebas
 """
 
-
-
-import time, serial
 import os
 import subprocess
 import time
 import base64
 import sys
-import glob
-import shutil
 import sqlite3
 import datetime
+import variables_globales
 
 # Conexión a la base de datos
 dbAforo = sqlite3.connect('/home/pi/innobusmx/data/db/aforo')
@@ -57,14 +53,15 @@ conexion_FTP_webhost = "AT+QFTPOPEN=" + host_FTP_webhost + ",21"
 # Importante: Asegúrate de tener la biblioteca 'serial' importada
 import serial
 
-quectelUSB = ""
+quectelUSB = "" #Comunicacion con quectel
+timeCheck = "" # Para evitar que software se reinicie por limite de tiempo
 
 def config_PDP():
     # Reiniciar SIM
     enviaComando("AT+QFUN=5")
-    time.sleep(3)
+    time.sleep(5)
     enviaComando("AT+QFUN=6")
-    time.sleep(3)
+    time.sleep(5)
 
     # Configurar PDP context
     resp = enviaComando("AT+QICSGP=1,1,\"internet.itelcel.com\",\"\",\"\",0")
@@ -138,9 +135,14 @@ def ConfigurarFTP(servidor, tamanio = False):
         global intentos_actualizacion,tipo,nombre,ubicacion
         # version_Lista = version_LB
 
+        timeCheck.lastConnection = time.time() # Reporta actividad  
+
         if tamanio == False:
             tipo = "Lista.db"
             nombre = str(datetime.datetime.now().strftime('%Y%m%d'))
+            if str(variables_globales.version_tarjetas) == nombre:
+                print "-- La base de datos ya esta actualizada --"
+                return False
             ubicacion = "/MiPase/Tarjetas"
         else:
             tipo = "Software"
@@ -205,19 +207,20 @@ def enviaComando(comando, timeout = 5):
 def IniciarSesionFTP(servidor, tamanio):
     try:
         global intentos_ftp, contador
+        timeCheck.lastConnection = time.time() # Reporta actividad 
         print "Intentado conectar a servidor: %s" % servidor
         if servidor == "web":
             Aux = enviaComando(conexion_FTP_webhost)
             if "OK" in Aux:
                 print "Conexion exitosa a servidor webhost"
-                time.sleep(3)
+                time.sleep(5)
                 contador = 0
                 intentos_ftp = 0
                 return UbicarPathFTP("web", tamanio)
             else:
                 print "Reintentando conectar a servidor webhost..."
                 enviaComando("AT+QFTPCLOSE")
-                time.sleep(3)
+                time.sleep(5)
                 if contador >= 6:
                     print "No se pudo establecer la conexion con el servidor FTP [web]"
                     if intentos_actualizacion >= 3:
@@ -237,7 +240,7 @@ def IniciarSesionFTP(servidor, tamanio):
             Aux = enviaComando(conexion_FTP_azure, 10)
             if "OK" in Aux and "625" not in Aux:
                 print "Conexion exitosa a azure"
-                time.sleep(3)
+                time.sleep(5)
                 contador = 0
                 intentos_ftp = 0
                 return UbicarPathFTP("azure", tamanio)
@@ -246,7 +249,7 @@ def IniciarSesionFTP(servidor, tamanio):
                     print "Error Not logged in"
                 print "Reintentando conectar a servidor azure..."
                 enviaComando("AT+QFTPCLOSE")
-                time.sleep(3)
+                time.sleep(5)
                 if intentos_ftp >= 3:
                     print "No se pudo establecer la conexion con el servidor FTP [Azure]"
                     print "intentando conexion alternativa con servidor webhost"
@@ -277,6 +280,8 @@ def UbicarPathFTP(servidor, tamanio):
         global id_Unidad, nombre, ubicacion, tipo
 
         global intentos_ftp
+
+        timeCheck.lastConnection = time.time() # Reporta actividad 
         print ">>>>>>>>>>>>>>>>>Buscando archivo:%s.txt en la ubicacion:%s" % (nombre, ubicacion)
         # define ubicacion
         edo = enviaComando('AT+QFTPCWD="%s"' % ubicacion, 10)
@@ -312,13 +317,14 @@ def UbicarPathFTP(servidor, tamanio):
         # descarga archivo
         comando_descarga = 'AT+QFTPGET="%s.txt","UFS:%s.txt"\r\n' % (nombre, nombre)
         quectelUSB.write(comando_descarga)
-        time.sleep(3)  # Esperar unos segundos para que se complete la descarga
+        time.sleep(5)  # Esperar unos segundos para que se complete la descarga
         # print(quectelUSB.readline())
         Reintentar = "false"
         # Limpia buffer para no considerar echo de comando
         print quectelUSB.readline().decode()
         print quectelUSB.readline().decode()
-
+        
+        timeCheck.lastConnection = time.time() # Reporta actividad 
         # Espera y maneja respuesta
         while True:
             print "descargando archivo de %s..." % servidor
@@ -374,6 +380,8 @@ def leerArchivo(servidor, tamanio):
     i_AT=1
     while i_AT <= 3:
         try:
+            
+
             print "Descargando archivo de quectel y generando txt / intento: %d" % i_AT
             archivo = '%s.txt' % nombre
             comando = 'AT+QFDWL="%s"\r\n' % archivo
@@ -384,7 +392,8 @@ def leerArchivo(servidor, tamanio):
             error = False
             
             while True:
-                response = quectelUSB.readline()  # Leer una línea de datos
+                timeCheck.lastConnection = time.time() # Reporta actividad 
+                response = quectelUSB.read(1024)  # Leer una línea de datos
                 if response:
                     if not content_started:
                         if "[" in response:
@@ -477,6 +486,7 @@ def leerArchivo(servidor, tamanio):
 def ActualizarArchivos(tamanio_esperado):
     global nombre, intentos_ftp, tipo
     time.sleep(1)
+    timeCheck.lastConnection = time.time() # Reporta actividad 
     filename = '/home/pi/update.zip'
 
     try:
@@ -493,7 +503,7 @@ def ActualizarArchivos(tamanio_esperado):
             else:
                 print "No se puede leer el tamano del archivo: update.zip"
             
-            time.sleep(3)
+            time.sleep(5)
                 
             print("Descomprimiendo...")
             subprocess.call('pwd', shell=True)
@@ -509,7 +519,7 @@ def ActualizarArchivos(tamanio_esperado):
                 subprocess.call('rm -rf /home/pi/update/', shell=True)
             
             subprocess.call("unzip -o /home/pi/actualizacion/update.zip -d /home/pi/", shell=True)
-            time.sleep(3)
+            time.sleep(2)
             print(".zip descomprimido")
                 
             if os.path.exists("/home/pi/update/"):
@@ -529,7 +539,7 @@ def ActualizarArchivos(tamanio_esperado):
                     subprocess.call('mv -f /home/pi/update/ /home/pi/%s/' % carpetaSoftware, shell=True)
                     print "Regresando archivos originales, manteniendo los actualizados..."
                     subprocess.call('cp -rn /home/pi/antigua/* /home/pi/%s/' % carpetaSoftware, shell=True)
-                    time.sleep(3)
+                    time.sleep(5)
                     print "Eliminando carpeta antigua..."
                     subprocess.call('sudo chmod -R a+rwx /home/pi/antigua/', shell=True)
                     subprocess.call('rm -rf /home/pi/antigua/', shell=True)
@@ -558,13 +568,15 @@ def ActualizarArchivos(tamanio_esperado):
 
                 if tipo == "Software":
                     subprocess.call("sudo reboot now", shell=True)
-                        
+                elif tipo == "Lista.db":
+                    variables_globales.version_tarjetas = str(nombre)
+                    #Mandar que ya termino
                 return True
                 
             elif os.path.exists("/home/pi/tarjetas.db"):
                 print "No existe la carpeta descomprimida como /home/pi/update/"
                 print "Existe el archivo tarjetas.db"
-                time.sleep(3)
+                time.sleep(5)
                 subprocess.call('rm -rf /home/pi/actualizacion/update.zip', shell=True)
                 # Mueve el .db a su ubicacion necesaria y dando permisos a carpeta de software
                 subprocess.call('mv -v /home/pi/tarjetas.db /home/pi/' + carpetaSoftware + '/data/db/', shell=True)
@@ -582,6 +594,11 @@ def ActualizarArchivos(tamanio_esperado):
                 #print "Actualización completada, Reiniciando boletera..."
                 print "Actualización completada..."
                 print "#############################################"
+                variables_globales.version_tarjetas = str(nombre)
+                
+                print "La version de DB es: " + str(variables_globales.version_tarjetas)
+
+                # Mandar que ya termino
 
                 return True
             else:
@@ -616,15 +633,17 @@ def cerrar_conexion_ftp():
 
 
 #----------------------------------------------------------Main
-def main(objSerial,size = False):
-    global quectelUSB
+def main(objSerial,objCK,size = False):
+    global quectelUSB,timeCheck
     try:
+        timeCheck = objCK
         #objSerial.open3G()
         #quectelUSB = quectelUSB = serial.Serial('/dev/ttyUSB_0', baudrate=115200, timeout=5)
         quectelUSB = objSerial.ser3G
         inicio = 0
         while inicio < 3:
             time.sleep(1)
+            timeCheck.lastConnection = time.time()
             ok = QuectelON()
             if ok:
                 if size == False:

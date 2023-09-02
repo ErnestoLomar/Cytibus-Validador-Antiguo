@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, date
 import datetime as dt
 import subprocess
 from tarjetasDB import obtener_tarjeta_mipase_por_UID
-from alttusDB import registrar_aforo_mipase
+from alttusDB import registrar_aforo_mipase, periodo_5Mins_MiPase
 
 os.environ['DISPLAY'] = ":0"
 class clMifare(QtCore.QThread):
@@ -37,7 +37,7 @@ class clMifare(QtCore.QThread):
     def mostrar_imagen(self, imagen):
         self.parent.stImgTarjeta = '/home/pi/innobusmx/data/img/'+imagen+'.jpg'
         self.parent.TISC = "MIPASE"
-        self.parent.stMsg = "NADA"
+        #self.parent.stMsg = "NADA"
         time.sleep(2)
         self.parent.TISC = ''
         self.parent.stImgTarjeta = ''
@@ -52,7 +52,7 @@ class clMifare(QtCore.QThread):
             #self.parent.lblMsgVigencia.move(320, 300)
             self.parent.stImgTarjeta = '/home/pi/innobusmx/data/img/'+out+'.jpg'
             self.parent.TISC = out
-            self.parent.stMsg = msgCode
+            #self.parent.stMsg = msgCode
             time.sleep(2)
             self.parent.TISC = ''
             self.parent.stImgTarjeta = ''
@@ -85,25 +85,38 @@ class clMifare(QtCore.QThread):
                 
                 try:
                     ##################### ERNESTO LOMAR #####################
-                    tarjeta_mi_pase = obtener_tarjeta_mipase_por_UID(str(self.out)[:14])
-                    if tarjeta_mi_pase != None:
-                        print "\x1b[1;33m"+"La tarjeta es identificada como MI PASE"
-                        tarjeta_de_mi_pase = True
-                        fecha_actual = dt.date.today()
-                        hora_actual = datetime.now().time()
-                        registro_aforo_mipase = registrar_aforo_mipase(str(self.out)[:14], 0, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), self.clquectel.latitud, self.clquectel.longitud, self.clDB.idTransportista, self.clDB.economico)
-                        if registro_aforo_mipase:
-                            print "\x1b[1;33m"+"Registro de aforo exitoso MI PASE"
-                            if tarjeta_mi_pase[1]:
-                                self.mostrar_imagen("aprobada_mipase")
+                    if "PR" in str(self.out) or "OM" in str(self.out):
+                        if "PR" in str(self.out):
+                            tarjeta_mi_pase = obtener_tarjeta_mipase_por_UID(str(self.out)[:14])
+                            if tarjeta_mi_pase != None:
+                                print "\x1b[1;33m"+"La tarjeta es identificada como MI PASE"
+                                tarjeta_de_mi_pase = True
+                                esta_en_tiempo = periodo_5Mins_MiPase(str(self.out)[:14])
+                                if esta_en_tiempo:
+                                    self.preaderLocal.write('14')
+                                    if tarjeta_mi_pase[1]:
+                                        fecha_actual = dt.date.today()
+                                        hora_actual = datetime.now().time()
+                                        registro_aforo_mipase = registrar_aforo_mipase(str(self.out)[:14], 0, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), self.clquectel.latitud, self.clquectel.longitud, self.clDB.idTransportista, self.clDB.economico)
+                                        if registro_aforo_mipase:
+                                            print "\x1b[1;33m"+"Registro de aforo exitoso MI PASE"
+                                            self.mostrar_imagen("aprobada_mipase")
+                                        else:
+                                            print "\x1b[1;33m"+"No se registro el aforo MI PASE"
+                                            self.mostrar_imagen("2")
+                                    else:
+                                        self.mostrar_imagen(str(tarjeta_mi_pase[2]))
+                                else:
+                                    self.preaderLocal.write('12')
+                                    print "\x1b[1;33m"+"La tarjeta MI PASE ya fue utilizada en este periodo de 5 minutos"
+                                    self.mostrar_imagen("0")
                             else:
-                                self.mostrar_imagen("declinada_mipase")
+                                tarjeta_mi_pase = False
                         else:
-                            print "\x1b[1;33m"+"No se registro el aforo MI PASE"
-                    else:
-                        tarjeta_mi_pase = False
+                            tarjeta_de_mi_pase = True
                 except Exception, e:
                     print "Fallo la lectura de tarjeta mi pase: " + str(e)
+                    self.mostrar_imagen("2")
                 ##################### ERNESTO LOMAR #####################
                 
                 #print "(",len(self.out),') out', self.out
