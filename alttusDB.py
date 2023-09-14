@@ -321,16 +321,28 @@ def crear_tabla_de_parametros():
     except Exception, e:
         print "No se pudo crear la tabla de parametros alttus: " + str(e)
 
-def obtener_puerto_del_socket():
+def obtener_parametros():
     try:
         conexion = sqlite3.connect(URI)
         cursor = conexion.cursor()
-        cursor.execute("SELECT puertoSocket FROM parametros")
+        cursor.execute("SELECT * FROM parametros")
         resultado = cursor.fetchall()
         conexion.close()
         return resultado
     except Exception, e:
         print "Fallo al obtener el puertoSocket: " + str(e)
+        
+def actualizar_socket(puerto):
+    try:
+        conexion = sqlite3.connect(URI)
+        cursor = conexion.cursor()
+        cursor.execute("UPDATE parametros SET puertoSocket = ?", (puerto,))
+        conexion.commit()
+        conexion.close()
+        return True
+    except Exception, e:
+        print "Fallo al actualizar puertoSocket: " + str(e)
+        return False
 
 #crear_tabla_de_horas()
 

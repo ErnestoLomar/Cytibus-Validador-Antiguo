@@ -20,7 +20,7 @@ import RPi.GPIO as GPIO
 import variables_globales as vg
 from PyQt4.QtCore import QSettings
 
-from alttusDB import obtener_estado_de_todas_las_ventas_no_enviadas, actualizar_estado_aforo_mipase_check_servidor, obtener_estadisticas_no_enviadas, actualizar_estado_estadistica_check_servidor, insertar_estadisticas_alttus, actualizar_estado_hora_check_hecho, obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_por_defecto, obtener_ultima_ACT
+from alttusDB import obtener_estado_de_todas_las_ventas_no_enviadas, actualizar_estado_aforo_mipase_check_servidor, obtener_estadisticas_no_enviadas, actualizar_estado_estadistica_check_servidor, insertar_estadisticas_alttus, actualizar_estado_hora_check_hecho, obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_por_defecto, obtener_ultima_ACT, obtener_parametros
 from tarjetasDB import obtener_tarjeta_mipase_por_UID
 import FTPAlttus
 
@@ -864,15 +864,17 @@ class clQuectel(QtCore.QThread):
         try:
             time.sleep(0.0001)
             time.sleep(0.0001)
+            
+            parametros = obtener_parametros()
+            
             # variables de prueba
             tcp = "\"TCP\""
             # identifica el envio por tcp
             ip = "\"20.106.77.209\""
-            puerto_socket = "8300"
             # ip publica o URL del servidor
             #print("qi open")
             # comando at, formato de envio, direciion ip o url, puerto del servidor, puerto por defecto del quectel, parametro de envio por push
-            comando = "AT+QIOPEN=1,0,"+tcp+","+ip+","+puerto_socket+",0,1\r\n"
+            comando = "AT+QIOPEN=1,0,"+tcp+","+ip+","+str(parametros[0][2])+",0,1\r\n"
             self.serial.write3G(comando)
             i = 0
             print "Comando: AT+QIOPEN"
@@ -935,6 +937,7 @@ class clQuectel(QtCore.QThread):
                             break
                         elif 'ERROR' in resultado or 'FAIL' in resultado or j == 20:
                             print "\x1b[1;33m"+"La trama no se pudo enviar: "+str(resultado)
+                            self.parent.flAlttus = False
                             return {
                                 "enviado": False,
                                 "accion": "error"
@@ -943,6 +946,7 @@ class clQuectel(QtCore.QThread):
                 elif 'ERROR' in resultado or i == 20:
                     print "\x1b[1;33m"+"Error al ejecutar el comando AT+QISEND"
                     print "\x1b[1;33m"+str(Aux.decode())
+                    self.parent.flAlttus = False
                     return {
                         "enviado": False,
                         "accion": "error"

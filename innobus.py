@@ -20,7 +20,7 @@ from ClSMS import clSMS
 from ClBarras import clBarras
 import RPi.GPIO as GPIO
 
-from alttusDB import insertar_estadisticas_alttus, obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_check_hecho, obtener_puerto_del_socket, eliminar_aforos_antiguos, eliminar_estadisticas_antiguas
+from alttusDB import insertar_estadisticas_alttus, obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_check_hecho, eliminar_aforos_antiguos, eliminar_estadisticas_antiguas, actualizar_socket, obtener_parametros
 
 os.environ['DISPLAY'] = ":0"
 
@@ -1568,7 +1568,9 @@ class mainWin(QtGui.QMainWindow):
             stdout, _ = process.communicate()
             mac = stdout.decode().strip()  # Convierte la salida de bytes a una cadena
             
-            puertoSocket = str(obtener_puerto_del_socket()).replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",","")
+            parametros = obtener_parametros()
+            
+            puertoSocket = str(parametros[0][2])
             if puertoSocket is None:
                 puertoSocket = self.clDB.puertoSocket
             else:
@@ -1631,6 +1633,48 @@ class mainWin(QtGui.QMainWindow):
                 print "Ocurrió un error al verificar las bases de datos: ", e
                 time.sleep(0.10)
                 print "################################################"
+                
+    def escogerSocket(self):
+        try:
+            print "Se procedera a escoger el socket"
+            
+            if self.clDB.idTransportista is not None:
+                if self.clDB.idTransportista == 0:
+                    actualizar_socket("8100")
+                elif self.clDB.idTransportista == 1:
+                    actualizar_socket("8101")
+                elif self.clDB.idTransportista == 2:
+                    actualizar_socket("8102")
+                elif self.clDB.idTransportista == 3:
+                    actualizar_socket("8103")
+                elif self.clDB.idTransportista == 4:
+                    actualizar_socket("8104")
+                elif self.clDB.idTransportista == 5:
+                    actualizar_socket("8105")
+                elif self.clDB.idTransportista == 6:
+                    actualizar_socket("8106")
+                elif self.clDB.idTransportista == 7:
+                    actualizar_socket("8107")
+                elif self.clDB.idTransportista == 8:
+                    actualizar_socket("8108")
+                elif self.clDB.idTransportista == 9:
+                    actualizar_socket("8109")
+                elif self.clDB.idTransportista == 10:
+                    actualizar_socket("8110")
+                else:
+                    actualizar_socket("8141")
+            else:
+                actualizar_socket("8141")
+                
+            parametros = obtener_parametros()
+            
+            print "El socket escogido es: "+str(parametros[0][2])
+            print "################################################"
+            print "\n"
+        except Exception, e:
+            print "Ocurrió un error al escoger el socket: ", e
+            time.sleep(0.10)
+            print "################################################"
 
     def Operador(self):
         if self.imgOperador.isVisible():
@@ -1989,6 +2033,11 @@ def main():
                 ex.eliminarDatosAntiguos()
             except Exception, e:
                 print "Fallo la eliminacion de datos antiguos: " + str(e)
+                
+            try:
+                ex.escogerSocket()
+            except Exception, e:
+                print "Fallo la eleccion del socket: " + str(e)
         else:
             ex.settings.setValue("apagado_forzado",0)
     except Exception, e:
