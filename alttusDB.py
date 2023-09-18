@@ -307,7 +307,8 @@ def obtener_descripcion_de_codigo(codigo):
 tabla_parametros = ''' CREATE TABLE IF NOT EXISTS parametros (
     idTransportista int(4),
     idUnidad int(5),
-    puertoSocket int(10)
+    puertoSocket int(10),
+    enviarDatosAzure int(1)
 ) '''
 
 def crear_tabla_de_parametros():
@@ -342,6 +343,18 @@ def actualizar_socket(puerto):
         return True
     except Exception, e:
         print "Fallo al actualizar puertoSocket: " + str(e)
+        return False
+    
+def actualizar_enviarDatosAzure(enviar):
+    try:
+        conexion = sqlite3.connect(URI)
+        cursor = conexion.cursor()
+        cursor.execute("UPDATE parametros SET enviarDatosAzure = ?", (enviar,))
+        conexion.commit()
+        conexion.close()
+        return True
+    except Exception, e:
+        print "Fallo al actualizar enviarDatosAzure: " + str(e)
         return False
 
 #crear_tabla_de_horas()

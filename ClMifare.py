@@ -85,7 +85,7 @@ class clMifare(QtCore.QThread):
                 
                 try:
                     ##################### ERNESTO LOMAR #####################
-                    if "PR" in str(self.out) or "OM" in str(self.out):
+                    if "PR" in str(self.out) or "OM" in str(self.out) and len(str(self.out)) <= 20:
                         if "PR" in str(self.out):
                             tarjeta_mi_pase = obtener_tarjeta_mipase_por_UID(str(self.out)[:14])
                             if tarjeta_mi_pase != None:

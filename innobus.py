@@ -26,7 +26,7 @@ os.environ['DISPLAY'] = ":0"
 
 class mainWin(QtGui.QMainWindow):
 
-    stVersion = "vA2.31h"
+    stVersion = "vA2.32h"
     flRFID = False
     updateFirmware = False
 
@@ -223,13 +223,14 @@ class mainWin(QtGui.QMainWindow):
         self.noSIM.setScaledContents(True)
         self.noSIM.move(550,425)
         self.noSIM.resize(32, 20)
+        """
         ########## ERNESTO LOMAR ##########
         self.noAlttus = QtGui.QLabel(self)
         self.noAlttus.setPixmap(QtGui.QPixmap("/home/pi/innobusmx/data/img/alttusti.png"))
         self.noAlttus.setScaledContents(True)
         self.noAlttus.move(680,425)
         self.noAlttus.resize(50, 20)
-        ###################################
+        ###################################"""
 
         imgTarjetaAtras = "/home/pi/innobusmx/data/img/imgTarjetas/Cl.jpg"
         imgUsuarioTarjeta = "/home/pi/innobusmx/data/user/admin.Jpeg"
@@ -1796,6 +1797,7 @@ class Screen():
         else:
             self.parent.no3G.setPixmap(QtGui.QPixmap("/home/pi/innobusmx/data/img/noUSB.jpg"))
         
+        """
         ########## ERNESTO LOMAR ##########
         if (self.parent.flAlttus):
             self.parent.noAlttus.setPixmap(QtGui.QPixmap("/home/pi/innobusmx/data/img/alttusti.png"))
@@ -1806,7 +1808,7 @@ class Screen():
             else:
                 self.parent.noAlttus.setPixmap(QtGui.QPixmap(""))
                 self.fAl = True
-        ###################################   
+        ###################################   """
 
         if (self.parent.flRFID != self.rfid):
             if (not self.parent.flRFID):
