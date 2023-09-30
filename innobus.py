@@ -20,13 +20,15 @@ from ClSMS import clSMS
 from ClBarras import clBarras
 import RPi.GPIO as GPIO
 
-from alttusDB import insertar_estadisticas_alttus, obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_check_hecho, eliminar_aforos_antiguos, eliminar_estadisticas_antiguas, actualizar_socket, obtener_parametros
+from alttusDB import insertar_estadisticas_alttus, eliminar_aforos_antiguos, eliminar_estadisticas_antiguas
+from horariosDB import obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_check_hecho
+from parametrosDB import actualizar_socket, obtener_parametros
 
 os.environ['DISPLAY'] = ":0"
 
 class mainWin(QtGui.QMainWindow):
 
-    stVersion = "vA2.32h"
+    stVersion = "vA2.41h"
     flRFID = False
     updateFirmware = False
 

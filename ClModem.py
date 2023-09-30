@@ -20,7 +20,9 @@ import RPi.GPIO as GPIO
 import variables_globales as vg
 from PyQt4.QtCore import QSettings
 
-from alttusDB import obtener_estado_de_todas_las_ventas_no_enviadas, actualizar_estado_aforo_mipase_check_servidor, obtener_estadisticas_no_enviadas, actualizar_estado_estadistica_check_servidor, insertar_estadisticas_alttus, actualizar_estado_hora_check_hecho, obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_por_defecto, obtener_ultima_ACT, obtener_parametros, actualizar_enviarDatosAzure
+from alttusDB import obtener_estado_de_todas_las_ventas_no_enviadas, actualizar_estado_aforo_mipase_check_servidor, obtener_estadisticas_no_enviadas, actualizar_estado_estadistica_check_servidor, insertar_estadisticas_alttus, obtener_ultima_ACT, obtener_trama_FTP, obtener_ultima_ACT_no_enviada
+from horariosDB import actualizar_estado_hora_check_hecho, obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_por_defecto
+from parametrosDB import obtener_parametros, actualizar_enviarDatosAzure
 from tarjetasDB import obtener_tarjeta_mipase_por_UID
 import FTPAlttus
 
@@ -95,19 +97,8 @@ class clQuectel(QtCore.QThread):
         self.parent.stBoton = ""
         self.settings = QSettings("/home/pi/innobusmx/settings.ini", QSettings.IniFormat)
         self.intentos_envios_azure = 0
-        self.posibles_horas_conexion = {
-            "183000": False,
-            "190000": False,
-            "193000": False
-        }
-        
-        hora_actual = datetime.datetime.now().time()
-        for i in xrange(len(self.posibles_horas_conexion)):
-            if int(str(hora_actual.strftime("%H:%M:%S")).replace(":","")) >= int(list(self.posibles_horas_conexion.keys())[i]):
-                self.posibles_horas_conexion[list(self.posibles_horas_conexion.keys())[i]] = True
-                
-        for i in xrange(len(self.posibles_horas_conexion)):
-            print "Hora: ", list(self.posibles_horas_conexion.keys())[i], " Estado: ", self.posibles_horas_conexion[list(self.posibles_horas_conexion.keys())[i]]
+        self.intentos_tramas_ftp = 0
+        self.intentos_tramas_act = 0
         
         #if True:
         try:
@@ -672,105 +663,25 @@ class clQuectel(QtCore.QThread):
             try:
                 
                 datos_enviados_azure = False
-                abrir_puerto_azure = False
-                
-                parametros_unidad = obtener_parametros()[0]
-                
-                enviar_datos_azure_db = bool(int(parametros_unidad[3]))
-                
-                hora_actual = datetime.datetime.now().time()
-                
-                if int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  >= 183000 and int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  <= 200000 and enviar_datos_azure_db:
-                    
-                    horas_a_revisar = {clave: valor for clave, valor in self.posibles_horas_conexion.items() if valor is False}
-                    
-                    print "Horas a reviar: " + str(horas_a_revisar)
-                    
-                    if len(horas_a_revisar) > 0:
-                    
-                        for i in xrange(len(horas_a_revisar)):
-                            
-                            if int(str(hora_actual.strftime("%H:%M:%S")).replace(":","")) >= int(list(horas_a_revisar.keys())[i]):
                                 
-                                self.posibles_horas_conexion[list(horas_a_revisar.keys())[i]] = True
-                        
-                                cantidad_datos_por_enviar = 0
-                                cantidad_datos_por_enviar = len(obtener_estado_de_todas_las_ventas_no_enviadas()) + len(obtener_estadisticas_no_enviadas())
-                                
-                                while int(self.intentos_envios_azure) <= 15 and int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  <= 200000 and cantidad_datos_por_enviar > 0:
+                self.enviar_datos_a_Azure()
+            
+                ####### VERIFICAR SI SE PUEDE CREAR LA TRAMA ACT #######
+                self.crear_tramas_ACT()
+                ############################################################
                                     
-                                    if abrir_puerto_azure == False:
-                                        abrir_puerto_azure = self.iniciar_conexion_tcp_azure()
-                                        
-                                    if abrir_puerto_azure:
-                                
-                                        ####### VERIFICAR SI HAY AFOROS PENDIENTES POR ENVIAR #######
-                                        aforos_pendientes_mipase = obtener_estado_de_todas_las_ventas_no_enviadas()
-                                        if len(aforos_pendientes_mipase) > 0:
-                                            #self.settings.setValue("mandando_datos",1)
-                                            self.enviar_aforos_mipase()
-                                            datos_enviados_azure = True
-                                            #self.settings.setValue("mandando_datos",0)
-                                        else:
-                                            print "Sin aforos mipase pendientes de enviar a Azure"
-                                        ############################################################
-                                            
-                                        ####### VERIFICAR SI HAY ESTADISTICAS PENDIENTES POR ENVIAR #######
-                                        estadisticas_pendientes =obtener_estadisticas_no_enviadas()
-                                        if len(estadisticas_pendientes) > 0:
-                                            #self.settings.setValue("mandando_datos",1)
-                                            self.enviar_estadisticas_azure()
-                                            datos_enviados_azure = True
-                                            #self.settings.setValue("mandando_datos",0)
-                                        else:
-                                            print "Sin estadisticas mipase pendientes de enviar a Azure"
-                                    
-                                        ############################################################
-                                
-                                    ####### VERIFICAR SI SE PUEEDE ENVIAR LA TRAMA ACT #######
-                                    obtener_todas_las_horasdb = obtener_estado_de_todas_las_horas_no_hechas()
-                                    for i in xrange(len(obtener_todas_las_horasdb)):
-                                        hora_iteracion = obtener_todas_las_horasdb[i]
-                                        hora_actual = datetime.datetime.now().time()
-                                        if int(str(hora_actual.strftime("%H:%M:%S")).replace(":","")) >= int(str(hora_iteracion[1]).replace(":","")):
-                                            hecho = actualizar_estado_hora_check_hecho("Ok", hora_iteracion[0])
-                                            if hecho:
-                                                print "Ya se actualizo la hora check en servidor de: " + str(hora_iteracion)
-                                                fecha_actual = datetime.date.today()
-                                                insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "ACT", "") # Solicitar actualizacion
-                                    ############################################################
-                                    
-                                    hora_actual = datetime.datetime.now().time()
-                                    cantidad_datos_por_enviar = len(obtener_estado_de_todas_las_ventas_no_enviadas()) + len(obtener_estadisticas_no_enviadas())
-                                    print "Cantidad de datos por enviar: " + str(cantidad_datos_por_enviar)
-                                    print "Intentos de envio a Azure: " + str(self.intentos_envios_azure)
-                                    print "Hora actual: " + str(hora_actual)
-                                    
-                                    if self.intentos_envios_azure > 15:
-                                        self.intentos_envios_azure = 0
-                                        abrir_puerto_azure = False
-                                        break
-                                    
-                                    if cantidad_datos_por_enviar == 0 or int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  >= 200000:
-                                        actualizar_enviarDatosAzure(0)
-                                        self.intentos_envios_azure = 0
-                                        abrir_puerto_azure = False
-                    else:
-                        print "No hay horas para enviar a Azure"
-                        if bool(int(enviar_datos_azure_db)):
-                            actualizar_enviarDatosAzure(0)
                 
                 ####### VERIFICAR SI ESTA EN EL RANGO DE LAS 04:37:00-04:40:00 #######
                 hora_actual = datetime.datetime.now().time()
                 if int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  >= 43700 and int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  <= 44000:
-                    actualizar_enviarDatosAzure(1)
-                    
-                    for i in xrange(len(self.posibles_horas_conexion)):
-                        self.posibles_horas_conexion[list(self.posibles_horas_conexion.keys())[i]] = False
                     
                     self.parent.crear_tramas9()
-                    abrir_puerto_azure = self.iniciar_conexion_tcp_azure()
-                    FTPAlttus.main(self.serial, self.parent)
+                    
+                    self.iniciar_conexion_tcp_azure()
+                    respuesta_ftp = FTPAlttus.main(self.serial, self.parent)
+                    fecha_actual = datetime.date.today()
+                    insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "FTR", str(respuesta_ftp)) # Solicitar actualizacion
+                    
                     datos_enviados_azure = True
                 ############################################################
                 
@@ -782,7 +693,13 @@ class clQuectel(QtCore.QThread):
                 
                 ####### VERIFICAR SI HAY QUE PONER POR DEFECTO LA BASE DE DATOS HORAS #######
                 
+                # The code is checking if the length of the string representation of the result of the
+                # function `obtener_ultima_ACT()` is greater than 2. If it is, it assigns the value of
+                # the third element of the first element of the result of `obtener_ultima_ACT()` to
+                # the variable `fecha_str`. It then converts `fecha_str` to a `datetime` object using
+                # the format "%Y-%m-%d" and assigns it to the variable `fecha_datetime`.
                 reiniciar_valores_por_defecto = False
+                
                 if len(str(obtener_ultima_ACT())) > 2:
                     fecha_str = obtener_ultima_ACT()[0][3]
                     fecha_datetime = datetime.datetime.strptime(fecha_str, "%Y-%m-%d")
@@ -791,33 +708,100 @@ class clQuectel(QtCore.QThread):
                         print "Es un dia diferente"
                     else:
                         print "Es el mismo dia"
+                        
+                        
                 
-                if int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  >= 200500 and int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  <= 220500 or reiniciar_valores_por_defecto:
-                    hecho_horas = actualizar_estado_hora_por_defecto()
-                    actualizar_enviarDatosAzure(1)
+                # The code is checking if the current time is between 23:35:00 and 23:59:59 or if the
+                # variable `reiniciar_valores_por_defecto` is true. If either condition is true, it
+                # calls the `actualizar_estado_hora_por_defecto()` function, updates some values, and
+                # prints a message indicating whether the database hours were successfully updated or
+                # not.
+                if int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  >= 233500 and int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  <= 235959 or reiniciar_valores_por_defecto:
                     
-                    for i in xrange(len(self.posibles_horas_conexion)):
-                        self.posibles_horas_conexion[list(self.posibles_horas_conexion.keys())[i]] = False
+                    hecho_horas = actualizar_estado_hora_por_defecto()
                     
                     intentos_cambiar = 0
+                    
                     if not hecho_horas:
                         while not hecho_horas or intentos_cambiar <= 5:
                             hecho_horas = actualizar_estado_hora_por_defecto()
                             intentos_cambiar += 1
                         if hecho_horas:
-                            reiniciar_valores_por_defecto = False
-                            print "Se actualizaron las BD horas a por defecto"
+                            print "Se actualizaron las BD horas a por defecto 2"
                         else:
-                            reiniciar_valores_por_defecto = True
                             print "No se actualizaron las BD horas a por defecto"
+                    else:
+                        print "Se actualizaron las BD horas a por defecto"
                 ############################################################
                 
             except Exception, e:
                 print "\x1b[1;31;47m"+"Fallo codigo de verificacion de datos pendientes."+str(e)+"\033[0;m"
+                
             ##################### ERNESTO LOMAR #####################
+            
             time.sleep(1)
     
-    ##################### ERNESTO LOMAR #####################
+    def crear_tramas_ACT(self):
+        
+        obtener_todas_las_horasdb = obtener_estado_de_todas_las_horas_no_hechas()
+        
+        for i in xrange(len(obtener_todas_las_horasdb)):
+            
+            hora_iteracion = obtener_todas_las_horasdb[i]
+            
+            hora_actual = datetime.datetime.now().time()
+            
+            if int(str(hora_actual.strftime("%H:%M:%S")).replace(":","")) >= int(str(hora_iteracion[1]).replace(":","")):
+                
+                hecho = actualizar_estado_hora_check_hecho("OK", hora_iteracion[0])
+                
+                if hecho:
+                    print "Ya se actualizo la hora check en servidor de: " + str(hora_iteracion)
+                    fecha_actual = datetime.date.today()
+                    insert_hecho = insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "ACT", "") # Solicitar actualizacion
+                    if insert_hecho:
+                        print "Se inserto la estadistica de ACT"
+                    else:
+                        actualizar_estado_hora_check_hecho("NO", hora_iteracion[0])
+
+    def enviar_datos_a_Azure(self):
+        
+        # The above code is checking if there are any pending FTP frames to send. If there are, it
+        # sends them. If not, it checks if there are any pending ACT frames to send. If there are, it
+        # sends them. If not, it resets the FTP attempts counter and checks if there are any unsent
+        # sales data to send to Azure. If there are, it sends them. Finally, it checks if there are
+        # any unsent statistics data to send to Azure. If there are, it sends them.
+        
+        tramas_ftp = obtener_trama_FTP()
+        
+        if len(tramas_ftp) > 0 and self.intentos_tramas_ftp <= 10:
+            
+            self.enviar_tramas_ftp()
+        
+        else:
+            
+            tramas_act = obtener_ultima_ACT_no_enviada()
+            
+            if len(tramas_act) > 0 and self.intentos_tramas_act <= 10:
+                
+                self.enviar_tramas_act()
+            
+            else:
+            
+                self.intentos_tramas_ftp = 0
+                self.intentos_tramas_act = 0
+                
+                aforos_pendientes_mipase = obtener_estado_de_todas_las_ventas_no_enviadas()
+                if len(aforos_pendientes_mipase) > 0:
+                    self.enviar_aforos_mipase()
+                else:
+                    print "Sin aforos mipase pendientes de enviar a Azure"
+                    
+                estadisticas_pendientes =obtener_estadisticas_no_enviadas()
+                if len(estadisticas_pendientes) > 0:
+                    self.enviar_estadisticas_azure()
+                else:
+                    print "Sin estadisticas mipase pendientes de enviar a Azure"
     
     def iniciar_conexion_tcp_azure(self):
         
@@ -850,6 +834,10 @@ class clQuectel(QtCore.QThread):
         
         try:
             ########## QICLOSE #########
+            
+            self.parent.waitting = True
+            time.sleep(0.0001)
+            self.parent.sendData = True
 
             comando = "AT+QICLOSE=1\r\n"
             print self.serial.readln3G()
@@ -1278,12 +1266,10 @@ class clQuectel(QtCore.QThread):
         try:
             aforos_pendientes_mipase = obtener_estado_de_todas_las_ventas_no_enviadas()
             if len(aforos_pendientes_mipase) > 0:
+                print "\n"
                 print "\x1b[1;33m"+"Existen aforos de mi pase penientes por enviar.."
                 intentos = 0
-                intentos_enviar_aforos = 0
-                aforo_enviado = False
                 uid_aforo = ""
-                costo_aforo = ""
                 fecha_aforo = ""
                 hora_aforo = ""
                 print "\x1b[1;32m"+"Se van a enviar datos a Azure"
@@ -1309,26 +1295,25 @@ class clQuectel(QtCore.QThread):
                             trama = "[5,B,"+num_economico_aforo+","+transportista_aforo+","+uid_aforo+","+str(fecha_aforo.replace("-","")[3:]+hora_aforo.replace(":",""))+","+latitud_aforo+","+longitud_aforo+"]"
                         
                         print "\x1b[1;32m"+"Aforo a enviar: " + str(trama)
-                        enviado = self.mandar_datos(trama)
-                        aforo_enviado = enviado['enviado']
-                        respuesta_aforo = enviado['accion']
-                        aforo_actualizado_db = False
-                        if aforo_enviado:
-                            print "\x1b[1;32m"+"La respuesta de Azure es: " + str(respuesta_aforo)
-                            while aforo_actualizado_db != False or intentos <= 3:
+                        enviado = self.sendData(trama)
+                        datos = str(enviado).split("\r\n")
+                        #print "La respuesta de Cytibus es: ", datos
+                        respuesta = [elemento for elemento in datos if "SKT:" in elemento]
+                        if not respuesta:
+                            print "No se obtuvo una respuesta de Mi Pase"
+                        else:
+                            print "La respuesta de Mi Pase es: ", respuesta[0]
+                            aforo_actualizado_db = False
+                            intentos = 0
+                            while aforo_actualizado_db == False and intentos <= 3:
                                 aforo_actualizado_db = actualizar_estado_aforo_mipase_check_servidor("OK", id_aforo)
                                 intentos += 1
-                                if aforo_actualizado_db or intentos >= 3:
-                                    intentos = 0
-                                    break
                             if aforo_actualizado_db:
-                                intentos = 0
-                                print "\x1b[1;32m"+"Aforo enviado registrado en BD"
+                                print "\x1b[1;32m"+"Aforo enviado y registrado en BD"
                             else:
                                 print "\x1b[1;33m"+"No se actualizo el aforo en la base de datos"
-                            self.realizar_accion(enviado)
-                        else:
-                            print "\x1b[1;31;47m"+"El aforo no pudo ser enviado"+"\033[0;m"
+                            self.realizar_accion(respuesta[0])
+                        print "\n"
             else:
                 print "\x1b[1;32m"+"Sin aforos pendientes de Azure"
         except Exception, e:
@@ -1339,11 +1324,7 @@ class clQuectel(QtCore.QThread):
             estadisticas_pendientes_mipase = obtener_estadisticas_no_enviadas()
             if len(estadisticas_pendientes_mipase) > 0:
                 print "\x1b[1;33m"+"Existen estadisticas de mi pase penientes por enviar.."
-                configuracion_realizada = False
-                abrir_puerto_azure = False
                 intentos = 0
-                intentos_enviar_estadisticas = 0
-                estadistica_enviada = False
                 id_estadistica = ""
                 unidad_estadistica = ""
                 transportista_estadistica = ""
@@ -1351,6 +1332,7 @@ class clQuectel(QtCore.QThread):
                 hora_estadistica = ""
                 columna_estadistica = ""
                 valor_estadistica = ""
+                print "\n"
                 print "\x1b[1;32m"+"Se van a enviar datos a Azure"
                 for i in xrange(5):
                     estadistica = obtener_estadisticas_no_enviadas()
@@ -1370,30 +1352,143 @@ class clQuectel(QtCore.QThread):
                             trama = "[9,"+str(unidad_estadistica)+","+str(transportista_estadistica)+","+str(fecha_estadistica.replace("-","")[3:]+hora_estadistica.replace(":",""))+","+str(columna_estadistica)+"]"
                             
                         print "\x1b[1;32m"+"Estadistica a enviar: " + str(trama)
-                        enviado = self.mandar_datos(trama)
-                        estadistica_enviada = enviado['enviado']
-                        respuesta_estadistica = enviado['accion']
-                        estadistica_actualizada_db = False
-                        if estadistica_enviada:
-                            print "\x1b[1;32m"+"La respuesta de Azure es: " + str(respuesta_estadistica)
-                            while estadistica_actualizada_db != False or intentos <= 3:
-                                estadistica_actualizada_db = actualizar_estado_estadistica_check_servidor("OK", id_estadistica)
+                        enviado = self.sendData(trama)
+                        datos = str(enviado).split("\r\n")
+                        #print "La respuesta de Cytibus es: ", datos
+                        respuesta = [elemento for elemento in datos if "SKT:" in elemento]
+                        if not respuesta:
+                            print "No se obtuvo una respuesta de Mi Pase"
+                        else:
+                            print "La respuesta de Mi Pase es: ", respuesta[0]
+                            estadistica_actualizado_db = False
+                            intentos = 0
+                            while estadistica_actualizado_db == False and intentos <= 3:
+                                estadistica_actualizado_db = actualizar_estado_estadistica_check_servidor("OK", id_estadistica)
                                 intentos += 1
-                                if estadistica_actualizada_db or intentos >= 3:
-                                    intentos = 0
-                                    break
-                            if estadistica_actualizada_db:
-                                intentos = 0
-                                print "\x1b[1;32m"+"Estadistica enviada registrada en BD"
+                            if estadistica_actualizado_db:
+                                print "\x1b[1;32m"+"Estadistica enviada y registrada en BD"
                             else:
                                 print "\x1b[1;33m"+"No se actualizo la estadistica en la base de datos"
-                            self.realizar_accion(enviado)
-                        else:
-                            print "\x1b[1;31;47m"+"La estadistica no pudo ser enviada"+"\033[0;m"
+                            self.realizar_accion(respuesta[0])
+                        print "\n"
             else:
                 print "\x1b[1;32m"+"Sin estadisticas pendientes de Azure"
         except Exception, e:
             print "\x1b[1;31;47m"+"Fallo el metodo de enviar estadistica: "+str(e)+"\033[0;m"
+            
+    def enviar_tramas_ftp(self):
+        try:
+            tramas_ftp_pendientes = obtener_trama_FTP()
+            if len(tramas_ftp_pendientes) > 0:
+                print "\x1b[1;33m"+"Existen estadisticas de FTP penientes por enviar.."
+                intentos = 0
+                id_estadistica = ""
+                unidad_estadistica = ""
+                transportista_estadistica = ""
+                fecha_estadistica = ""
+                hora_estadistica = ""
+                columna_estadistica = ""
+                valor_estadistica = ""
+                print "\n"
+                print "\x1b[1;32m"+"Se van a enviar datos de FTP a Azure"
+                for i in xrange(5):
+                    estadistica = obtener_trama_FTP()
+                    if len(estadistica) > 0:
+                        print "\x1b[1;32m"+"Se encontro esta estadistica FTP" + str(estadistica)
+                        id_estadistica = str(estadistica[0][0])
+                        unidad_estadistica = str(estadistica[0][1])
+                        transportista_estadistica = str(estadistica[0][2])
+                        fecha_estadistica = str(estadistica[0][3])
+                        hora_estadistica = str(estadistica[0][4])
+                        columna_estadistica = str(estadistica[0][5])
+                        valor_estadistica = str(estadistica[0][6])
+                        
+                        trama = "[9,"+str(unidad_estadistica)+","+str(transportista_estadistica)+","+str(fecha_estadistica.replace("-","")[3:]+hora_estadistica.replace(":",""))+","+str(columna_estadistica)+","+str(valor_estadistica)+"]"
+                            
+                        print "\x1b[1;32m"+"Estadistica FTP a enviar: " + str(trama)
+                        #enviado = self.mandar_datos(trama)
+                        enviado = self.sendData(trama)
+                        datos = str(enviado).split("\r\n")
+                        #print "La respuesta de Cytibus es: ", datos
+                        respuesta = [elemento for elemento in datos if "SKT:" in elemento]
+                        if not respuesta:
+                            print "No se obtuvo una respuesta de Mi Pase"
+                            self.intentos_tramas_ftp += 1
+                        else:
+                            print "La respuesta de Mi Pase es: ", respuesta[0]
+                            tramaftp_actualizado_db = False
+                            intentos = 0
+                            while tramaftp_actualizado_db == False and intentos <= 3:
+                                tramaftp_actualizado_db = actualizar_estado_estadistica_check_servidor("OK", id_estadistica)
+                                intentos += 1
+                            if tramaftp_actualizado_db:
+                                print "\x1b[1;32m"+"Estadistica FTP enviada y registrada en BD"
+                            else:
+                                print "\x1b[1;33m"+"No se actualizo la estadistica FTP en la base de datos"
+                                self.intentos_tramas_ftp += 1
+                            self.realizar_accion(respuesta[0])
+                        print "\n"
+            else:
+                print "\x1b[1;32m"+"Sin estadisticas FTP pendientes de Azure"
+        except Exception, e:
+            print "\x1b[1;31;47m"+"Fallo el metodo de enviar estadistica FTP: "+str(e)+"\033[0;m"
+            
+    def enviar_tramas_act(self):
+        try:
+            tramas_ftp_pendientes = obtener_ultima_ACT_no_enviada()
+            if len(tramas_ftp_pendientes) > 0:
+                print "\x1b[1;33m"+"Existen estadisticas de ACT penientes por enviar.."
+                intentos = 0
+                id_estadistica = ""
+                unidad_estadistica = ""
+                transportista_estadistica = ""
+                fecha_estadistica = ""
+                hora_estadistica = ""
+                columna_estadistica = ""
+                valor_estadistica = ""
+                print "\n"
+                print "\x1b[1;32m"+"Se van a enviar dato de ACT a Azure"
+                for i in xrange(5):
+                    estadistica = obtener_ultima_ACT_no_enviada()
+                    if len(estadistica) > 0:
+                        print "\x1b[1;32m"+"Se encontro esta estadistica ACT" + str(estadistica)
+                        id_estadistica = str(estadistica[0][0])
+                        unidad_estadistica = str(estadistica[0][1])
+                        transportista_estadistica = str(estadistica[0][2])
+                        fecha_estadistica = str(estadistica[0][3])
+                        hora_estadistica = str(estadistica[0][4])
+                        columna_estadistica = str(estadistica[0][5])
+                        valor_estadistica = str(estadistica[0][6])
+                        
+                        trama = "[9,"+str(unidad_estadistica)+","+str(transportista_estadistica)+","+str(fecha_estadistica.replace("-","")[3:]+hora_estadistica.replace(":",""))+","+str(columna_estadistica)+","+str(valor_estadistica)+"]"
+                            
+                        print "\x1b[1;32m"+"Estadistica ACT a enviar: " + str(trama)
+                        #enviado = self.mandar_datos(trama)
+                        enviado = self.sendData(trama)
+                        datos = str(enviado).split("\r\n")
+                        #print "La respuesta de Cytibus es: ", datos
+                        respuesta = [elemento for elemento in datos if "SKT:" in elemento]
+                        if not respuesta:
+                            print "No se obtuvo una respuesta de Mi Pase"
+                            self.intentos_tramas_act += 1
+                        else:
+                            print "La respuesta de Mi Pase es: ", respuesta[0]
+                            tramaact_actualizado_db = False
+                            intentos = 0
+                            while tramaact_actualizado_db == False and intentos <= 3:
+                                tramaact_actualizado_db = actualizar_estado_estadistica_check_servidor("OK", id_estadistica)
+                                intentos += 1
+                            if tramaact_actualizado_db:
+                                print "\x1b[1;32m"+"Estadistica ACT enviada y registrada en BD"
+                            else:
+                                print "\x1b[1;33m"+"No se actualizo la estadistica ACT en la base de datos"
+                                self.intentos_tramas_act += 1
+                            self.realizar_accion(respuesta[0])
+                        print "\n"
+            else:
+                print "\x1b[1;32m"+"Sin estadisticas ACT pendientes de Azure"
+        except Exception, e:
+            print "\x1b[1;31;47m"+"Fallo el metodo de enviar estadistica ACT: "+str(e)+"\033[0;m"
     
     
     def realizar_accion(self, result):
@@ -1404,21 +1499,39 @@ class clQuectel(QtCore.QThread):
         "ACTUALIZAR", entonces se actualiza el raspberry
         """
         try:
-            if "accion" in result.keys():
-                accion = result['accion']
-                print "\x1b[1;32m"+"La accion a realizar es: " + str(accion)
-                if "C" in accion:
-                    try:
-                        datos = str(accion).replace("SKT:","").split(',')
-                        if len(datos) == 2:
-                            try:
-                                FTPAlttus.main(self.serial, self.parent, datos[1])
-                            except Exception, e:
-                                print "\x1b[1;33m"+"No se pudo iniciar la actualizacion remota."
-                        else:
-                            print "\x1b[1;33m"+"El tamanio de datos de la letra C no son 2."
-                    except Exception, e:
-                        print "LeerMinicom.py, linea 239: "+str(e)
+            accion = result
+            print "\x1b[1;32m"+"La accion a realizar es: " + str(accion)
+            if "C" in accion:
+                try:
+                    datos = str(accion).replace("SKT:","").split(',')
+                    fecha_actual = datetime.date.today()
+                    hora_actual = datetime.datetime.now().time()
+                    if len(datos) == 2:
+                        try:
+                            self.iniciar_conexion_tcp_azure()
+                            respuesta_ftp = FTPAlttus.main(self.serial, self.parent, datos[1])
+                            insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "FTP", str(respuesta_ftp)) # Solicitar actualizacion
+                            
+                            if "FTPOK" in respuesta_ftp:
+                                subprocess.call("sudo reboot now", shell=True)
+                            
+                        except Exception, e:
+                            print "\x1b[1;33m"+"No se pudo iniciar la actualizacion remota."
+                    elif len(datos) == 3:
+                        try:
+                            self.iniciar_conexion_tcp_azure()
+                            respuesta_ftp = FTPAlttus.main(self.serial, self.parent, datos[1])
+                            insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "FTP", str(respuesta_ftp)) # Solicitar actualizacion
+                            
+                            if "FTPOK" in respuesta_ftp and "R" in datos[2]:
+                                subprocess.call("sudo reboot now", shell=True)
+                                
+                        except Exception, e:
+                            print "\x1b[1;33m"+"No se pudo iniciar la actualizacion remota."
+                    else:
+                        print "\x1b[1;33m"+"El tamanio de datos de la letra C no son 2."
+                except Exception, e:
+                    print "LeerMinicom.py, linea 239: "+str(e)
         except Exception, e:
             print "LeerMinicom.py, linea 255: "+str(e)
     
@@ -2164,7 +2277,7 @@ class clQuectel(QtCore.QThread):
                 cmd = data+"\r\x1A"
                 stRead = self.write(cmd,("FAIL", 'recv', 'ERROR'), self.minAttempts)                  #---
                 if (stRead.find('"recv",0') != -1):
-                    print "Se envio un dato de Cytibus"
+                    print "Se envio un dato de Cytibus: ", data
                     result = self.write('AT+QIRD=0\r', ("OK", "ERROR"), self.minAttempts)             #----
                 #elif (stRead.find('RDY') != -1):
                 #    result = self.write(stReset3G, ("OK", "OK"), 1)             #----

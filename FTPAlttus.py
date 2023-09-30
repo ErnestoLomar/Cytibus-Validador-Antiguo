@@ -4,11 +4,16 @@
 Pruebas de FTP - Funcionamiento: PRuebas
 """
 
+
+
+import time, serial
 import os
 import subprocess
 import time
 import base64
 import sys
+import glob
+import shutil
 import sqlite3
 import datetime
 import variables_globales
@@ -55,6 +60,7 @@ import serial
 
 quectelUSB = "" #Comunicacion con quectel
 timeCheck = "" # Para evitar que software se reinicie por limite de tiempo
+respFTP = ""
 
 def config_PDP():
     # Reiniciar SIM
@@ -96,7 +102,7 @@ def QuectelON():
 
 def verificar_memoria_UFS(version_matriz):
     try:
-        global id_Unidad
+        global id_Unidad,respFTP
         Aux = enviaComando("AT+QFLST=\"*\"")
         #enviaComando("AT+QFDEL=\"*\"")
         if 'update.txt' in Aux:
@@ -126,13 +132,14 @@ def verificar_memoria_UFS(version_matriz):
     except Exception, e:
         exc_type, exc_obj, exc_tb = sys.exc_info()
         print "FTP.py,", exc_tb.tb_lineno, " Error al verificar memoria: " + str(e)
-        #Mandar Error
+        if intentos_actualizacion >= 2:
+            respFTP = "eMemQuectel" #Mandar Error
         return False
 
 
 def ConfigurarFTP(servidor, tamanio = False):
     try:
-        global intentos_actualizacion,tipo,nombre,ubicacion
+        global intentos_actualizacion,tipo,nombre,ubicacion,respFTP
         # version_Lista = version_LB
 
         timeCheck.lastConnection = time.time() # Reporta actividad  
@@ -173,7 +180,6 @@ def ConfigurarFTP(servidor, tamanio = False):
                 intentos_actualizacion += 1
                 if intentos_actualizacion >= 3:
                     intentos_actualizacion = 0
-                    #Mandar Error
                     return False
                 else:
                     return ConfigurarFTP(servidor, tamanio)
@@ -182,11 +188,10 @@ def ConfigurarFTP(servidor, tamanio = False):
     except Exception, e:
         exc_type, exc_obj, exc_tb = sys.exc_info()
         print "FTP.py,", exc_tb.tb_lineno, " Error al ConfigurarFTP: " + str(e)
-        #insertar_estadisticas_boletera(str(datos_de_la_unidad[1]), fecha, variables_globales.hora_actual, "error", f"MT_{version_matriz}") # Matriz tarifaría
         intentos_actualizacion += 1
         if intentos_actualizacion >= 3:
             intentos_actualizacion = 0
-            #Mandar Error
+            respFTP = "eConfig"# Mandar Error [eConfig]
             return False
         else:
             return ConfigurarFTP(servidor, tamanio)
@@ -206,7 +211,7 @@ def enviaComando(comando, timeout = 5):
 
 def IniciarSesionFTP(servidor, tamanio):
     try:
-        global intentos_ftp, contador
+        global intentos_ftp, contador,respFTP
         timeCheck.lastConnection = time.time() # Reporta actividad 
         print "Intentado conectar a servidor: %s" % servidor
         if servidor == "web":
@@ -223,9 +228,8 @@ def IniciarSesionFTP(servidor, tamanio):
                 time.sleep(5)
                 if contador >= 6:
                     print "No se pudo establecer la conexion con el servidor FTP [web]"
-                    if intentos_actualizacion >= 3:
+                    if intentos_actualizacion >= 2:
                         pass
-                        #Mandar Error [No pudo conectarse azure ni webhost]
                     return False
                 contador += 1
                 intentos_ftp += 1
@@ -253,7 +257,8 @@ def IniciarSesionFTP(servidor, tamanio):
                 if intentos_ftp >= 3:
                     print "No se pudo establecer la conexion con el servidor FTP [Azure]"
                     print "intentando conexion alternativa con servidor webhost"
-                    ret = ConfigurarFTP("web", tamanio, version_Lista)
+                    respFTP = "eServidor"# Mandar Error [eServidor]
+                    ret = ConfigurarFTP("web", tamanio)
                 else:
                     contador += 1
                     intentos_ftp += 1
@@ -261,23 +266,21 @@ def IniciarSesionFTP(servidor, tamanio):
                     ret = IniciarSesionFTP("azure", tamanio)
             contador = 0
             intentos_ftp = 0
-            #insertar_estadisticas_boletera(str(datos_de_la_unidad[1]), fecha, variables_globales.hora_actual, "error", f"MT_{version_MT}") # Matriz tarifaría
             print "####################################################### Regresa de azure:%s" % ret
             return ret
 
     except Exception, e:
         exc_type, exc_obj, exc_tb = sys.exc_info()
         print "FTP.py,", exc_tb.tb_lineno, " Error al IniciarSesionFTP: " + str(e)
-        if intentos_actualizacion >= 3:
-            pass
-            #Mandar Error [No pudo conectarse azure ni webhost]
+        if intentos_actualizacion >= 2:
+            respFTP = "eSesion" # Mandar Error [eSesion]
         return False
 
 
 
 def UbicarPathFTP(servidor, tamanio):
     try:
-        global id_Unidad, nombre, ubicacion, tipo
+        global id_Unidad, nombre, ubicacion, tipo,respFTP
 
         global intentos_ftp
 
@@ -286,11 +289,15 @@ def UbicarPathFTP(servidor, tamanio):
         # define ubicacion
         edo = enviaComando('AT+QFTPCWD="%s"' % ubicacion, 10)
         if "ERROR:" in edo:
+            if intentos_actualizacion >= 2:
+                respFTP = "eQFTPCWD"# Mandar Error [eQFTPCWD]
             return False
         time.sleep(2)
         edo = enviaComando('AT+QFTPSIZE="%s.txt"' % nombre, 10)
 
         if "ERROR:" in edo:
+            if intentos_actualizacion >= 2:
+                respFTP = "eQFTPSIZE"# Mandar Error [eQFTPSIZE]
             return False
         elif "+QFTPSIZE:" in edo:
             # Comparacion de tamano con el que esta en el servidor(aun no descargado)
@@ -303,6 +310,8 @@ def UbicarPathFTP(servidor, tamanio):
                     if int(tam[1]) != int(tamanio):
                         print "El tamano del archivo en %s no coincide" % servidor
                         print "\tSe esperaba: %d Bytes, se encuentra un archivo de: %d Bytes" % (tamanio, int(tam[1]))
+                        if intentos_actualizacion >= 2:
+                            respFTP = "eSIZE"# Mandar Error [eSIZE]
                         return False
                 elif tipo == "Lista.db":
                     # Si es Lista.db obtiene el tamano del servidor ya que hasta ahora se desconoce
@@ -310,9 +319,8 @@ def UbicarPathFTP(servidor, tamanio):
                     print "El tamano del archivo es %d" % tamanio
             else:
                 print "Error al obtener tamano del archivo"
-                if intentos_actualizacion >= 3:
-                    pass
-                    # Mandar error [No se encontro archivo txt correspondiente]
+                if intentos_actualizacion >= 2:
+                    respFTP = "eNOTXT"# Mandar Error [eNOTXT]
                 return False
         # descarga archivo
         comando_descarga = 'AT+QFTPGET="%s.txt","UFS:%s.txt"\r\n' % (nombre, nombre)
@@ -361,8 +369,8 @@ def UbicarPathFTP(servidor, tamanio):
                 Reintentar = "True"
                 break
         if Reintentar == "True":
-            if intentos_actualizacion >= 3:
-                pass#Mandar Error [Error al descargar de servidor]
+            if intentos_actualizacion >= 2:
+                respFTP = "eDWLServidor"# Mandar Error [eDWLServidor]
             return False
         else:
             return leerArchivo(servidor, tamanio)
@@ -370,13 +378,14 @@ def UbicarPathFTP(servidor, tamanio):
     except Exception, e:
         exc_type, exc_obj, exc_tb = sys.exc_info()
         print "FTP.py,", exc_tb.tb_lineno, " Error al UbicarPathFTP: " + str(e)
-        #Mandar Error
+        if intentos_actualizacion >= 2:
+            respFTP = "ePath"# Mandar Error [ePath]
         return False
 
 
 def leerArchivo(servidor, tamanio):
     
-    global nombre
+    global nombre,respFTP
     i_AT=1
     while i_AT <= 3:
         try:
@@ -407,8 +416,8 @@ def leerArchivo(servidor, tamanio):
                         error = True
                         break
             if error:
-                if intentos_actualizacion >= 3:
-                    pass#Mandar Error [Error en descarga quectel - Raspberry]
+                if intentos_actualizacion >= 2:
+                    respFTP = "eDWLQuectel"# Mandar Error [eDWLQuectel]
                     return False
                 i_AT += 1
                 continue
@@ -465,26 +474,28 @@ def leerArchivo(servidor, tamanio):
                 
             else:
                 print "No se puede leer el tamano del archivo: %s.txt" % nombre
+                if intentos_actualizacion >= 2:
+                    respFTP = "eTXTRPI"#Mandar Error [eTXTRPI]
             time.sleep(1)
             return False
         except Exception, e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             print "FTP.py,", exc_tb.tb_lineno, " Error al leer archivo: " + str(e)
-            if intentos_actualizacion >= 3:
-                pass#Mandar Error [Error en descarga quectel - Raspberry]
+            if intentos_actualizacion >= 2:
+                respFTP = "eCrearTXT"#Mandar Error [eCrearTXT]
                 return False
             i_AT += 1
             continue
     # Termina while
-    if intentos_actualizacion >= 3:
-        pass#Mandar Error [Error en descarga quectel - Raspberry]
+    if intentos_actualizacion >= 2:
+        respFTP = "eLeerArchivo"#Mandar Error [eLeerArchivo]
     return False
         
 
     
 
 def ActualizarArchivos(tamanio_esperado):
-    global nombre, intentos_ftp, tipo
+    global nombre, intentos_ftp, tipo, respFTP
     time.sleep(1)
     timeCheck.lastConnection = time.time() # Reporta actividad 
     filename = '/home/pi/update.zip'
@@ -567,10 +578,11 @@ def ActualizarArchivos(tamanio_esperado):
                 print "#############################################"
 
                 if tipo == "Software":
-                    subprocess.call("sudo reboot now", shell=True)
+                    respFTP = "FTPOK"#Mandar [FTPOK]
+                    # subprocess.call("sudo reboot now", shell=True)
                 elif tipo == "Lista.db":
                     variables_globales.version_tarjetas = str(nombre)
-                    #Mandar que ya termino
+                    respFTP = "FTPOK"#Mandar [FTPOK]
                 return True
                 
             elif os.path.exists("/home/pi/tarjetas.db"):
@@ -598,7 +610,7 @@ def ActualizarArchivos(tamanio_esperado):
                 
                 print "La version de DB es: " + str(variables_globales.version_tarjetas)
 
-                # Mandar que ya termino
+                respFTP = "FTPOK"# Mandar [FTPOK]
 
                 return True
             else:
@@ -608,19 +620,20 @@ def ActualizarArchivos(tamanio_esperado):
             print "#############################################"
             print "Algo fallo"
             print "#############################################"
-            if intentos_actualizacion >= 3:
-                pass#Mandar Error [No se encontro carpeta update ni archivo .db]
+            if intentos_actualizacion >= 2:
+                respFTP = "eCARPETAoDB"#Mandar Error [eCARPETAoDB]
             return False
         else:
             print "No se encontró el archivo"
             time.sleep(1)
-            if intentos_actualizacion >= 3:
-                pass#Mandar Error [No hay zip]
+            if intentos_actualizacion >= 2:
+                respFTP = "eNOZIP"#Mandar Error [eNOZIP]
             return False
     except Exception, e:
         exc_type, exc_obj, exc_tb = sys.exc_info()
         print "FTP.py,", str(exc_tb.tb_lineno) + str(e)
-        # Mandar Error
+        if intentos_actualizacion >= 2:
+            respFTP = "eUnknown"#Mandar Error [eUnknown]
         return False
 
 
@@ -658,11 +671,11 @@ def main(objSerial,objCK,size = False):
                 else:
                     print "--------------INCORRECTO----------------"
                     cerrar_conexion_ftp()
-                    #Mandar Error
                     break
             else:
                 print "No se obtuvo respuesta del quectel..."
                 inicio = inicio + 1
                 continue
+        return respFTP
     except Exception, e:
         print e

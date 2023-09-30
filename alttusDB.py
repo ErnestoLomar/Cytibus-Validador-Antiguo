@@ -109,64 +109,6 @@ def periodo_5Mins_MiPase(csn):
 ##########################################################################################################
 ##########################################################################################################
 
-#Creando una tabla llamada geocercas_servicios.
-tabla_de_horas = '''CREATE TABLE horas (
-    hora_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    hora TIME,
-    check_hecho TEXT(10) default 'NO'
-)'''
-
-def crear_tabla_de_horas():
-    try:
-        #Establecemos la conexion con la base de datos
-        con = sqlite3.connect(URI)
-        cur = con.cursor()
-        #Ejecutando la sentencia SQL en la variable `tabla_geocercas_servicios`.
-        cur.execute(tabla_de_horas)
-        con.close()
-    except Exception, e:
-        print "No se pudo crear la tabla de horas alttus: " + str(e)
-
-def obtener_estado_de_todas_las_horas_no_hechas():
-    try:
-        conexion = sqlite3.connect(URI)
-        cursor = conexion.cursor()
-        cursor.execute("SELECT * FROM horas WHERE check_hecho = 'NO'")
-        resultado = cursor.fetchall()
-        conexion.close()
-        return resultado
-    except Exception, e:
-        print "Fallo al obtener todas las horas: " + str(e)
-
-def actualizar_estado_hora_check_hecho(estado, id):
-    try:
-        conexion = sqlite3.connect(URI)
-        cursor = conexion.cursor()
-        cursor.execute("UPDATE horas SET check_hecho = ? WHERE hora_id = ?", (estado,id))
-        conexion.commit()
-        conexion.close()
-        return True
-    except Exception, e:
-        print "Fallo al actualizar check_hecho de horas: " + str(e)
-        return False
-    
-def actualizar_estado_hora_por_defecto():
-    try:
-        conexion = sqlite3.connect(URI)
-        cursor = conexion.cursor()
-        cursor.execute("UPDATE horas SET check_hecho = 'NO'")
-        conexion.commit()
-        conexion.close()
-        return True
-    except Exception, e:
-        print "Fallo al actualizar check_hecho de horas: " + str(e)
-        return False
-#crear_tabla_de_horas()
-
-##########################################################################################################
-##########################################################################################################
-##########################################################################################################
-
 tabla_estadisticas = ''' CREATE TABLE IF NOT EXISTS estadisticas (
     idMuestreo INTEGER PRIMARY KEY AUTOINCREMENT,
     unidad TEXT(10),
@@ -257,6 +199,28 @@ def obtener_ultima_ACT():
         return resultado
     except Exception, e:
         print "Fallo al obtener ultima estadistica ACT: " + str(e)
+        
+def obtener_ultima_ACT_no_enviada():
+    try:
+        conexion = sqlite3.connect(URI)
+        cursor = conexion.cursor()
+        cursor.execute("SELECT * FROM estadisticas WHERE columna_db = 'ACT' AND check_servidor = 'NO' ORDER BY idMuestreo DESC LIMIT 1")
+        resultado = cursor.fetchall()
+        conexion.close()
+        return resultado
+    except Exception, e:
+        print "Fallo al obtener ultima estadistica ACT: " + str(e)
+        
+def obtener_trama_FTP():
+    try:
+        conexion = sqlite3.connect(URI)
+        cursor = conexion.cursor()
+        cursor.execute("SELECT * FROM estadisticas WHERE columna_db = 'FTP' AND check_servidor = 'NO' ORDER BY idMuestreo DESC LIMIT 1")
+        resultado = cursor.fetchall()
+        conexion.close()
+        return resultado
+    except Exception, e:
+        print "Fallo al obtener ultima estadistica FTP: " + str(e)
     
 #crear_tabla_de_horas()v
 
@@ -264,110 +228,8 @@ def obtener_ultima_ACT():
 ##########################################################################################################
 ##########################################################################################################
 
-#Creando una tabla llamada geocercas_servicios.
-tabla_de_codigos = '''CREATE TABLE codigos(
-    codigo_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    codigo INTEGER,
-    descripcion TEXT(50)
-)'''
-
-def crear_tabla_de_codigos():
-    try:
-        #Establecemos la conexion con la base de datos
-        con = sqlite3.connect(URI)
-        cur = con.cursor()
-        #Ejecutando la sentencia SQL en la variable `tabla_geocercas_servicios`.
-        cur.execute(tabla_de_codigos)
-        con.close()
-    except Exception, e:
-        print "No se pudo crear la tabla de codigos alttus: " + str(e)
-
-def obtener_descripcion_de_codigo(codigo):
-    try:
-        conexion = sqlite3.connect(URI)
-        cursor = conexion.cursor()
-        cursor.execute("SELECT * FROM codigos WHERE codigo = ?", (codigo))
-        resultado = cursor.fetchall()
-        conexion.close()
-        return resultado
-    except Exception, e:
-        print "Fallo al obtener la descripcion del codigo: " + str(e)
-
-#crear_tabla_de_horas()
-
-##########################################################################################################
-##########################################################################################################
-##########################################################################################################
-
-
-##########################################################################################################
-##########################################################################################################
-##########################################################################################################
-
-tabla_parametros = ''' CREATE TABLE IF NOT EXISTS parametros (
-    idTransportista int(4),
-    idUnidad int(5),
-    puertoSocket int(10),
-    enviarDatosAzure int(1)
-) '''
-
-def crear_tabla_de_parametros():
-    try:
-        #Establecemos la conexion con la base de datos
-        con = sqlite3.connect(URI)
-        cur = con.cursor()
-        #Ejecutando la sentencia SQL en la variable `tabla_geocercas_servicios`.
-        cur.execute(tabla_parametros)
-        con.close()
-    except Exception, e:
-        print "No se pudo crear la tabla de parametros alttus: " + str(e)
-
-def obtener_parametros():
-    try:
-        conexion = sqlite3.connect(URI)
-        cursor = conexion.cursor()
-        cursor.execute("SELECT * FROM parametros")
-        resultado = cursor.fetchall()
-        conexion.close()
-        return resultado
-    except Exception, e:
-        print "Fallo al obtener el puertoSocket: " + str(e)
-        
-def actualizar_socket(puerto):
-    try:
-        conexion = sqlite3.connect(URI)
-        cursor = conexion.cursor()
-        cursor.execute("UPDATE parametros SET puertoSocket = ?", (puerto,))
-        conexion.commit()
-        conexion.close()
-        return True
-    except Exception, e:
-        print "Fallo al actualizar puertoSocket: " + str(e)
-        return False
-    
-def actualizar_enviarDatosAzure(enviar):
-    try:
-        conexion = sqlite3.connect(URI)
-        cursor = conexion.cursor()
-        cursor.execute("UPDATE parametros SET enviarDatosAzure = ?", (enviar,))
-        conexion.commit()
-        conexion.close()
-        return True
-    except Exception, e:
-        print "Fallo al actualizar enviarDatosAzure: " + str(e)
-        return False
-
-#crear_tabla_de_horas()
-
-##########################################################################################################
-##########################################################################################################
-##########################################################################################################
-
 def crear_tablas():
     crear_tabla_de_aforos()
-    crear_tabla_de_horas()
-    crear_tabla_de_codigos()
     crear_tabla_de_estadisticas()
-    crear_tabla_de_parametros()
 
 #crear_tablas()
