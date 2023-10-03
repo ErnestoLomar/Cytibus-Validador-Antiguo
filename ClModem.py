@@ -2525,7 +2525,7 @@ class clQuectel(QtCore.QThread):
                     else:
                         stB = "p,"+str(self.clDB.idTransportista)+","+str(self.clDB.idUnidad)+",11,Reincio Ok,"+str(self.parent.csn)+",0,0,0,"+str(fecha)+","+str(fecha)
                     self.parent.locked = False
-                    self.reset()
+                    #self.reset()
                     self.write('AT+QGPSEND\r', ("OK", "ERROR"), self.timeOutGPS)                      #---
                     time.sleep(2)
                     self.write('AT+QGPSDEL=0\r', ("OK", "ERROR"), self.timeOutGPS)                      #---
@@ -2536,7 +2536,7 @@ class clQuectel(QtCore.QThread):
                 if (stGPS[1] == "y"):
                     st = '1,'+str(self.clDB.idTransportista)+','+str(self.clDB.idUnidad)+','+str(self.datetimes)+',1,0,0,0,0\r'    # latitud = 1   ----> Reinicio OK
                     st = self.sendData(st)
-                    self.reset()
+                    #self.reset()
                     
         return st
 
@@ -2722,7 +2722,7 @@ class clQuectel(QtCore.QThread):
                     self.clDB.envio(1,stB)
                     self.parent.flSendEnvio = True
                     self.GPSWaitting += self.GPSDelay                   
-                    self.reset()
+                    #self.reset()
             #self.parent.lblError.setText("")
         '''
         elif ((int(time.time())-self.GPSOffline) > self.GPSWaitting):
