@@ -1,5 +1,14 @@
 # Cytibus-Validador-Antiguo
 
+- A2.43:
+  - Ya no se crean las tramas 9.
+  - Las ACT se envían cada hora.
+- A2.42:
+  - Se modifico el código de ClModem para que ya no se reinicia el sistema cuando no tiene un GPS conectado.
+- A2.41:
+  - X
+- A2.32:
+  - X
 - A2.31h:
   - Se agregaron 2 bases de datos nuevas, "alttusti" y "tarjetas".
   - El validador ahora puede aceptar tarjetas de Mi Pase.

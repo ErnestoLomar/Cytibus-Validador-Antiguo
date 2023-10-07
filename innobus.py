@@ -21,14 +21,14 @@ from ClBarras import clBarras
 import RPi.GPIO as GPIO
 
 from alttusDB import insertar_estadisticas_alttus, eliminar_aforos_antiguos, eliminar_estadisticas_antiguas
-from horariosDB import obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_check_hecho
+from horariosDB import obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_check_hecho, actualizar_estado_hora_por_defecto
 from parametrosDB import actualizar_socket, obtener_parametros
 
 os.environ['DISPLAY'] = ":0"
 
 class mainWin(QtGui.QMainWindow):
 
-    stVersion = "vA2.42h"
+    stVersion = "vA2.43h"
     flRFID = False
     updateFirmware = False
 
@@ -2014,14 +2014,32 @@ def main():
     try:
         if not bool(int(ex.settings.value('apagado_forzado').toPyObject())):
             
+            """
             # Creacion de tramas 9
             try:
                 ex.crear_tramas9()
             except Exception, e:
-                print "Fallo la creacion de las tramas 9 en main: " + str(e)
+                print "Fallo la creacion de las tramas 9 en main: " + str(e)"""
             
             # Verificacion de hora actual en BD
             try:
+                # Primero colocamos todas las horas como no hechas
+                hecho_horas = actualizar_estado_hora_por_defecto()
+                    
+                intentos_cambiar = 0
+                
+                if not hecho_horas:
+                    while not hecho_horas or intentos_cambiar <= 5:
+                        hecho_horas = actualizar_estado_hora_por_defecto()
+                        intentos_cambiar += 1
+                    if hecho_horas:
+                        print "Se actualizaron las BD horas a por defecto 2"
+                    else:
+                        print "No se actualizaron las BD horas a por defecto"
+                else:
+                    print "Se actualizaron las BD horas a por defecto"
+                    
+                # Luego verificamos si la hora actual es mayor a la hora de la BD
                 obtener_todas_las_horasdb = obtener_estado_de_todas_las_horas_no_hechas()
                 for i in xrange(len(obtener_todas_las_horasdb)):
                     hora_iteracion = obtener_todas_las_horasdb[i]

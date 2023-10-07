@@ -11,7 +11,6 @@ import datetime
 import RPi.GPIO as GPIO
 #from ClSMS import clSMS
 import variables_globales as vg
-from alttusDB import insertar_estadisticas_alttus
 
 class clSerial(QtCore.QThread):
     sPort = '/dev/ttyUSB_1'
@@ -314,10 +313,6 @@ class clSerial(QtCore.QThread):
         self.parent.lblNS.setText("NS:"+self.parent.serialNumber)
         self.parent.lblNSFirmware.setText(self.parent.version+"   "+self.parent.cpuSerial)
         self.parent.lblError.setText("")
-        fecha_actual = datetime.date.today()
-        hora_actual = datetime.datetime.now().time()
-        insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "NST", str(self.parent.serialNumber)) # Numero de serie de tablilla
-        insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "VT", str(self.parent.version)) # Version de la tablilla
 
         c = self.clDB.dbListaNegra.cursor()
         c.execute("SELECT csn FROM csn where csn = '"+self.parent.serialNumber+"'")

@@ -675,7 +675,7 @@ class clQuectel(QtCore.QThread):
                 hora_actual = datetime.datetime.now().time()
                 if int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  >= 43700 and int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  <= 44000:
                     
-                    self.parent.crear_tramas9()
+                    #self.parent.crear_tramas9()
                     
                     self.iniciar_conexion_tcp_azure()
                     respuesta_ftp = FTPAlttus.main(self.serial, self.parent)
@@ -1735,11 +1735,6 @@ class clQuectel(QtCore.QThread):
                 j = stRead.find("+QCCID:")
                 self.printDebug('###                              ICCID OK ###')
                 self.parent.iccid = stRead[j+8:j+28]
-                fecha_actual = datetime.date.today()
-                hora_actual = datetime.datetime.now().time()
-                insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "SIM", str(self.parent.iccid)) # ID SIM
-                fecha_actual = ""
-                hora_actual = ""
             else:
                 self.parent.iccid = ""
                 self.printDebug('###                      ERROR LEER ICCID - NS DE LA SIM ###')
