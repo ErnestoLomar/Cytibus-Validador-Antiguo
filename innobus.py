@@ -28,7 +28,7 @@ os.environ['DISPLAY'] = ":0"
 
 class mainWin(QtGui.QMainWindow):
 
-    stVersion = "vA2.43h"
+    stVersion = "vA2.43V"
     flRFID = False
     updateFirmware = False
 
@@ -1678,6 +1678,46 @@ class mainWin(QtGui.QMainWindow):
             print "Ocurrió un error al escoger el socket: ", e
             time.sleep(0.10)
             print "################################################"
+            
+    def sonidoOperador(self):
+        try:
+            GPIO.output(22, True)
+            GPIO.output(27, True)
+            time.sleep(0.1)
+            GPIO.output(22, False)
+            GPIO.output(27, False)
+            time.sleep(0.1)
+            GPIO.output(22, True)
+            GPIO.output(27, True)
+            time.sleep(0.1)
+            GPIO.output(22, False)
+            GPIO.output(27, False)
+            time.sleep(0.1)
+        except Exception, e:
+            print "Error al reproducir sonido de operador: ", e
+            
+    def sonidoAforo(self):
+        try:
+            GPIO.output(22, True)
+            GPIO.output(27, True)
+            time.sleep(0.2)
+            GPIO.output(22, False)
+            GPIO.output(27, False)
+            time.sleep(0.2)
+        except Exception, e:
+            print "Error al reproducir sonido de aforo: ", e
+            
+    def sonidoError(self):
+        try:
+            for i in xrange(5):
+                GPIO.output(22, True)
+                GPIO.output(27, True)
+                time.sleep(0.055)
+                GPIO.output(22, False)
+                GPIO.output(27, False)
+                time.sleep(0.055)
+        except Exception, e:
+            print "Error al reproducir sonido de error: ", e
 
     def Operador(self):
         if self.imgOperador.isVisible():
@@ -2002,6 +2042,8 @@ def main():
     GPIO.output(8,GPIO.HIGH)
     GPIO.output(24,GPIO.HIGH)
     GPIO.setup(12,GPIO.IN)
+    GPIO.setup(22,GPIO.OUT)
+    GPIO.setup(27,GPIO.OUT)
     
     time.sleep(3)    
     app = QtGui.QApplication(sys.argv)

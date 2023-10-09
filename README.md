@@ -1,13 +1,17 @@
 # Cytibus-Validador-Antiguo
 
-- A2.43:
+- A2.43V:
+  - Variante de la version 2.43h
+  - La detección de tarjetas en directamente por autorización de la base de datos del validador.
+  - El sonido del zumbador es emitido mediante un GPIO.
+- A2.43h:
   - Ya no se crean las tramas 9.
   - Las ACT se envían cada hora.
-- A2.42:
+- A2.42h:
   - Se modifico el código de ClModem para que ya no se reinicia el sistema cuando no tiene un GPS conectado.
-- A2.41:
+- A2.41h:
   - X
-- A2.32:
+- A2.32h:
   - X
 - A2.31h:
   - Se agregaron 2 bases de datos nuevas, "alttusti" y "tarjetas".
