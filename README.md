@@ -1,5 +1,8 @@
 # Cytibus-Validador-Antiguo
 
+- A2.44h:
+  - Se arreglo el bug de la duplicidad de las tramas ACT.
+  - Se redujo la cantidad de creación de tramas GPS de Cytibus.
 - A2.43V:
   - Variante de la version 2.43h
   - La detección de tarjetas en directamente por autorización de la base de datos del validador.

@@ -211,6 +211,18 @@ def obtener_ultima_ACT_no_enviada():
     except Exception, e:
         print "Fallo al obtener ultima estadistica ACT: " + str(e)
         
+def eliminar_todas_las_estadisticas_ACT():
+    try:
+        conexion = sqlite3.connect(URI)
+        cursor = conexion.cursor()
+        cursor.execute("DELETE FROM estadisticas WHERE columna_db = 'ACT' AND check_servidor = 'NO'")
+        conexion.commit()
+        conexion.close()
+        return True
+    except Exception, e:
+        print "Fallo al eliminar estadisticas ACT: " + str(e)
+        return False
+        
 def obtener_trama_FTP():
     try:
         conexion = sqlite3.connect(URI)

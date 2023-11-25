@@ -20,7 +20,7 @@ import RPi.GPIO as GPIO
 import variables_globales as vg
 from PyQt4.QtCore import QSettings
 
-from alttusDB import obtener_estado_de_todas_las_ventas_no_enviadas, actualizar_estado_aforo_mipase_check_servidor, obtener_estadisticas_no_enviadas, actualizar_estado_estadistica_check_servidor, insertar_estadisticas_alttus, obtener_ultima_ACT, obtener_trama_FTP, obtener_ultima_ACT_no_enviada
+from alttusDB import obtener_estado_de_todas_las_ventas_no_enviadas, actualizar_estado_aforo_mipase_check_servidor, obtener_estadisticas_no_enviadas, actualizar_estado_estadistica_check_servidor, insertar_estadisticas_alttus, obtener_ultima_ACT, obtener_trama_FTP, obtener_ultima_ACT_no_enviada, eliminar_todas_las_estadisticas_ACT
 from horariosDB import actualizar_estado_hora_check_hecho, obtener_estado_de_todas_las_horas_no_hechas, actualizar_estado_hora_por_defecto
 from parametrosDB import obtener_parametros, actualizar_enviarDatosAzure
 from tarjetasDB import obtener_tarjeta_mipase_por_UID
@@ -262,8 +262,16 @@ class clQuectel(QtCore.QThread):
         eini=GPIO.input(12)
         self.vigencias()
         alerta = 0
+        creacion_tramas_gps = True
+        
         while True:
-            self.obtenerCoordenadaGPS()
+            
+            if creacion_tramas_gps:
+                print "CREACION TRAMA GPS"
+                self.obtenerCoordenadaGPS()
+            
+            creacion_tramas_gps = not creacion_tramas_gps
+                
             self.clbarras.Barras()
             if (self.clbarras.ModuloBarras == False):
                 self.printDebug(self.RED+'Falla modulo de Barras'+self.RESET)
@@ -716,7 +724,7 @@ class clQuectel(QtCore.QThread):
                 # calls the `actualizar_estado_hora_por_defecto()` function, updates some values, and
                 # prints a message indicating whether the database hours were successfully updated or
                 # not.
-                if int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  >= 233500 and int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  <= 235959 or reiniciar_valores_por_defecto:
+                if int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  >= 234500 and int(str(hora_actual.strftime("%H:%M:%S")).replace(":",""))  <= 235959 or reiniciar_valores_por_defecto:
                     
                     hecho_horas = actualizar_estado_hora_por_defecto()
                     
@@ -735,7 +743,7 @@ class clQuectel(QtCore.QThread):
                 ############################################################
                 
             except Exception, e:
-                print "\x1b[1;31;47m"+"Fallo codigo de verificacion de datos pendientes."+str(e)+"\033[0;m"
+                print "\x1b[1;31;47m"+"Fallo codigo de verificacion de datos pendientes: "+str(e)+"\033[0;m"
                 
             ##################### ERNESTO LOMAR #####################
             
@@ -743,26 +751,73 @@ class clQuectel(QtCore.QThread):
     
     def crear_tramas_ACT(self):
         
-        obtener_todas_las_horasdb = obtener_estado_de_todas_las_horas_no_hechas()
+        try:
         
-        for i in xrange(len(obtener_todas_las_horasdb)):
+            obtener_todas_las_horasdb = obtener_estado_de_todas_las_horas_no_hechas()
             
-            hora_iteracion = obtener_todas_las_horasdb[i]
-            
-            hora_actual = datetime.datetime.now().time()
-            
-            if int(str(hora_actual.strftime("%H:%M:%S")).replace(":","")) >= int(str(hora_iteracion[1]).replace(":","")):
+            for i in xrange(len(obtener_todas_las_horasdb)):
                 
-                hecho = actualizar_estado_hora_check_hecho("OK", hora_iteracion[0])
+                hora_iteracion = obtener_todas_las_horasdb[i]
                 
-                if hecho:
-                    print "Ya se actualizo la hora check en servidor de: " + str(hora_iteracion)
-                    fecha_actual = datetime.date.today()
-                    insert_hecho = insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "ACT", "") # Solicitar actualizacion
-                    if insert_hecho:
-                        print "Se inserto la estadistica de ACT"
+                hora_actual = datetime.datetime.now().time()
+                
+                if int(str(hora_actual.strftime("%H:%M:%S")).replace(":","")) >= int(str(hora_iteracion[1]).replace(":","")):
+                    
+                    hecho = actualizar_estado_hora_check_hecho("OK", hora_iteracion[0])
+                    
+                    if hecho:
+                        
+                        print "Ya se actualizó la hora check en el servidor de: " + str(hora_iteracion)
+                        fecha_actual = datetime.date.today()
+                        
+                        ultima_trama_act = obtener_ultima_ACT()
+                        insert_hecho = False
+                        print "Ultima trama ACT: " + str(ultima_trama_act)
+
+                        if len(ultima_trama_act) > 0:
+                            
+                            fecha_ultima_trama_act = ultima_trama_act[0][3]
+                            hora_ultima_trama_act = ultima_trama_act[0][4]
+                            ultima_trama_timestamp = datetime.datetime.strptime("{} {}".format(fecha_ultima_trama_act, hora_ultima_trama_act), "%Y-%m-%d %H:%M:%S")
+                            tiempo_transcurrido = (datetime.datetime.now() - ultima_trama_timestamp).total_seconds() / 60  # Diferencia en minutos
+
+                            if tiempo_transcurrido <= 20:
+                                print "Ya se ha insertado la trama de ACT dentro de los últimos 20 minutos"
+                                actualizar_estado_hora_check_hecho("OK", hora_iteracion[0])
+                                continue
+                            else:
+                                print "No se insertó la trama de ACT en los últimos 20 minutos"
+                                eliminar_todas_las_estadisticas_ACT()
+                                insert_hecho = insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "ACT", "")
+                        else:
+                            eliminar_todas_las_estadisticas_ACT()
+                            insert_hecho = insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "ACT", "")
+                            
+                        if insert_hecho:
+                            print "Se insertó la estadística de ACT"
+                        else:
+                            ultima_trama_act = obtener_ultima_ACT()
+
+                            if len(ultima_trama_act) > 0:
+                                
+                                fecha_ultima_trama_act = ultima_trama_act[0][3]
+                                hora_ultima_trama_act = ultima_trama_act[0][4]
+                                ultima_trama_timestamp = datetime.datetime.strptime("{} {}".format(fecha_ultima_trama_act, hora_ultima_trama_act), "%Y-%m-%d %H:%M:%S")
+                                tiempo_transcurrido = (datetime.datetime.now() - ultima_trama_timestamp).total_seconds() / 60  # Diferencia en minutos
+
+                                if tiempo_transcurrido <= 20:
+                                    print "Ya se insertó la trama de ACT dentro de los últimos 20 minutos"
+                                    actualizar_estado_hora_check_hecho("OK", hora_iteracion[0])
+                                else:
+                                    print "No se insertó la trama de ACT en los últimos 20 minutos"
+                                    actualizar_estado_hora_check_hecho("NO", hora_iteracion[0])
+                            else:
+                                print "No se insertó la trama de ACT y no hay tramas ACT en la BD"
+                                actualizar_estado_hora_check_hecho("NO", hora_iteracion[0])
                     else:
-                        actualizar_estado_hora_check_hecho("NO", hora_iteracion[0])
+                        print "No se pudo actualizar el estado de la hora check"
+        except Exception, e:
+            print "\x1b[1;31;47m"+"Fallo crear_tramas_ACT: "+str(e)+"\033[0;m"
 
     def enviar_datos_a_Azure(self):
         
