@@ -28,7 +28,7 @@ os.environ['DISPLAY'] = ":0"
 
 class mainWin(QtGui.QMainWindow):
 
-    stVersion = "vA2.44h"
+    stVersion = "vA2.45h"
     flRFID = False
     updateFirmware = False
 
@@ -2087,7 +2087,7 @@ def main():
                     hora_iteracion = obtener_todas_las_horasdb[i]
                     hora_actual = datetime.datetime.now().time()
                     if int(str(hora_actual.strftime("%H:%M:%S")).replace(":","")) >= int(str(hora_iteracion[1]).replace(":","")):
-                        hecho = actualizar_estado_hora_check_hecho("Ok", hora_iteracion[0])
+                        hecho = actualizar_estado_hora_check_hecho("OK", hora_iteracion[0])
                         if hecho:
                             print "Se actualizo la hora"
             except Exception, e:

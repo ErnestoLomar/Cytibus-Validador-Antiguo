@@ -262,15 +262,17 @@ class clQuectel(QtCore.QThread):
         eini=GPIO.input(12)
         self.vigencias()
         alerta = 0
-        creacion_tramas_gps = True
+        contador_tramas_gps = 0
         
         while True:
             
-            if creacion_tramas_gps:
+            contador_tramas_gps += 1
+            
+            if contador_tramas_gps == 1:
                 print "CREACION TRAMA GPS"
                 self.obtenerCoordenadaGPS()
-            
-            creacion_tramas_gps = not creacion_tramas_gps
+            elif contador_tramas_gps >= 3:
+                contador_tramas_gps = 0
                 
             self.clbarras.Barras()
             if (self.clbarras.ModuloBarras == False):
@@ -297,25 +299,29 @@ class clQuectel(QtCore.QThread):
                             fechaGPS = str(self.datetimes)
                         else:
                             fechaGPS = fecha
-                        self.parent.stBoton = "p,"+str(self.clDB.idTransportista)+","+str(self.clDB.idUnidad)+",1,Boton panico,"+str(self.parent.csn)+","+lat+","+lon+","+str(self.velGPS)+","+fechaGPS+","+str(fecha)+","+str(self.clDB.idRuta)+","+str(self.parent.idOperador)
-                        self.clDB.envio(1,self.parent.stBoton)
-                        self.parent.flSendEnvio = True
+                        # codigo de boton de panico desabilitado
+                        # self.parent.stBoton = "p,"+str(self.clDB.idTransportista)+","+str(self.clDB.idUnidad)+",1,Boton panico,"+str(self.parent.csn)+","+lat+","+lon+","+str(self.velGPS)+","+fechaGPS+","+str(fecha)+","+str(self.clDB.idRuta)+","+str(self.parent.idOperador)
+                        # self.clDB.envio(1,self.parent.stBoton)
+                        # self.parent.flSendEnvio = True
+                        # codigo de boton de panico desabilitado
                     eini=eact
                     alerta = now
                 else:
-                    alerta = 0                
-                if (self.parent.stBoton != ""):
-                    #self.printDebug(self.parent.PURPLE+'###      Enviando Boton de Panico      ###'+self.parent.RESET)
-                    stSendData = self.sendData(self.parent.stBoton)
-                    if (stSendData != ""):
-                        stSendData = ''.join(stSendData)
-                        stSendData = stSendData.split("\r\n")
-                        if (len(stSendData) > 3):
-                            if stSendData[2] == "1":
-                                #self.printDebug(self.parent.PURPLE+'###      Envio Exitoso de Alerta de Boton de Panico      ###'+self.parent.RESET)
-                                self.parent.stBoton = ""
-                    #if (self.parent.stBoton != ""):
-                    #    self.printDebug(self.parent.REVERSE+self.parent.PURPLE+"Error al enviar Emergencia. Intenando Nuevamente........"+self.parent.RESET)
+                    alerta = 0
+                # codigo de boton de panico desabilitado                
+                # if (self.parent.stBoton != ""):
+                #    #self.printDebug(self.parent.PURPLE+'###      Enviando Boton de Panico      ###'+self.parent.RESET)
+                #    stSendData = self.sendData(self.parent.stBoton)
+                #    if (stSendData != ""):
+                #        stSendData = ''.join(stSendData)
+                #        stSendData = stSendData.split("\r\n")
+                #        if (len(stSendData) > 3):
+                #            if stSendData[2] == "1":
+                #                #self.printDebug(self.parent.PURPLE+'###      Envio Exitoso de Alerta de Boton de Panico      ###'+self.parent.RESET)
+                #                self.parent.stBoton = ""
+                #    #if (self.parent.stBoton != ""):
+                #    #    self.printDebug(self.parent.REVERSE+self.parent.PURPLE+"Error al enviar Emergencia. Intenando Nuevamente........"+self.parent.RESET)
+                # codigo de boton de panico desabilitado           
             #else:
             except:
                 exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -688,6 +694,7 @@ class clQuectel(QtCore.QThread):
                     self.iniciar_conexion_tcp_azure()
                     respuesta_ftp = FTPAlttus.main(self.serial, self.parent)
                     fecha_actual = datetime.date.today()
+                    hora_actual = datetime.datetime.now().time()
                     insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "FTR", str(respuesta_ftp)) # Solicitar actualizacion
                     
                     datos_enviados_azure = True
@@ -740,6 +747,16 @@ class clQuectel(QtCore.QThread):
                             print "No se actualizaron las BD horas a por defecto"
                     else:
                         print "Se actualizaron las BD horas a por defecto"
+                        
+                    # Luego verificamos si la hora actual es mayor a la hora de la BD
+                    obtener_todas_las_horasdb = obtener_estado_de_todas_las_horas_no_hechas()
+                    for i in xrange(len(obtener_todas_las_horasdb)):
+                        hora_iteracion = obtener_todas_las_horasdb[i]
+                        hora_actual = datetime.datetime.now().time()
+                        if int(str(hora_actual.strftime("%H:%M:%S")).replace(":","")) >= int(str(hora_iteracion[1]).replace(":","")):
+                            hecho = actualizar_estado_hora_check_hecho("OK", hora_iteracion[0])
+                            if hecho:
+                                print "Se actualizo la hora"
                 ############################################################
                 
             except Exception, e:
@@ -771,17 +788,19 @@ class clQuectel(QtCore.QThread):
                         fecha_actual = datetime.date.today()
                         
                         ultima_trama_act = obtener_ultima_ACT()
+                        print "Ultima trama ACT: ", ultima_trama_act
                         insert_hecho = False
-                        print "Ultima trama ACT: " + str(ultima_trama_act)
 
                         if len(ultima_trama_act) > 0:
+                            
+                            check_servidor_ultima_trama_act = ultima_trama_act[0][7]
                             
                             fecha_ultima_trama_act = ultima_trama_act[0][3]
                             hora_ultima_trama_act = ultima_trama_act[0][4]
                             ultima_trama_timestamp = datetime.datetime.strptime("{} {}".format(fecha_ultima_trama_act, hora_ultima_trama_act), "%Y-%m-%d %H:%M:%S")
                             tiempo_transcurrido = (datetime.datetime.now() - ultima_trama_timestamp).total_seconds() / 60  # Diferencia en minutos
 
-                            if tiempo_transcurrido <= 20:
+                            if tiempo_transcurrido <= 20 or check_servidor_ultima_trama_act == "NO":
                                 print "Ya se ha insertado la trama de ACT dentro de los últimos 20 minutos"
                                 actualizar_estado_hora_check_hecho("OK", hora_iteracion[0])
                                 continue
@@ -796,16 +815,19 @@ class clQuectel(QtCore.QThread):
                         if insert_hecho:
                             print "Se insertó la estadística de ACT"
                         else:
+                            
                             ultima_trama_act = obtener_ultima_ACT()
 
                             if len(ultima_trama_act) > 0:
+                                
+                                check_servidor_ultima_trama_act = ultima_trama_act[0][7]
                                 
                                 fecha_ultima_trama_act = ultima_trama_act[0][3]
                                 hora_ultima_trama_act = ultima_trama_act[0][4]
                                 ultima_trama_timestamp = datetime.datetime.strptime("{} {}".format(fecha_ultima_trama_act, hora_ultima_trama_act), "%Y-%m-%d %H:%M:%S")
                                 tiempo_transcurrido = (datetime.datetime.now() - ultima_trama_timestamp).total_seconds() / 60  # Diferencia en minutos
 
-                                if tiempo_transcurrido <= 20:
+                                if tiempo_transcurrido <= 20 or check_servidor_ultima_trama_act == "NO":
                                     print "Ya se insertó la trama de ACT dentro de los últimos 20 minutos"
                                     actualizar_estado_hora_check_hecho("OK", hora_iteracion[0])
                                 else:
@@ -1565,6 +1587,7 @@ class clQuectel(QtCore.QThread):
                         try:
                             self.iniciar_conexion_tcp_azure()
                             respuesta_ftp = FTPAlttus.main(self.serial, self.parent, datos[1])
+                            hora_actual = datetime.datetime.now().time()
                             insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "FTP", str(respuesta_ftp)) # Solicitar actualizacion
                             
                             if "FTPOK" in respuesta_ftp:
@@ -1576,6 +1599,7 @@ class clQuectel(QtCore.QThread):
                         try:
                             self.iniciar_conexion_tcp_azure()
                             respuesta_ftp = FTPAlttus.main(self.serial, self.parent, datos[1])
+                            hora_actual = datetime.datetime.now().time()
                             insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "FTP", str(respuesta_ftp)) # Solicitar actualizacion
                             
                             if "FTPOK" in respuesta_ftp and "R" in datos[2]:

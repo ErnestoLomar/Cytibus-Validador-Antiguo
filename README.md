@@ -1,22 +1,25 @@
 # Cytibus-Validador-Antiguo
 
-- A2.44h:
+- vA2.45h:
+  - Se modifico la cantidad de creación de tramas GPS de 3 veces, 1 vez si y 2 veces no.
+  - Se quito la creación de tramas pánico.
+- vA2.44h:
   - Se arreglo el bug de la duplicidad de las tramas ACT.
   - Se redujo la cantidad de creación de tramas GPS de Cytibus.
-- A2.43V:
+- vA2.43V:
   - Variante de la version 2.43h
   - La detección de tarjetas en directamente por autorización de la base de datos del validador.
   - El sonido del zumbador es emitido mediante un GPIO.
-- A2.43h:
+- vA2.43h:
   - Ya no se crean las tramas 9.
   - Las ACT se envían cada hora.
-- A2.42h:
+- vA2.42h:
   - Se modifico el código de ClModem para que ya no se reinicia el sistema cuando no tiene un GPS conectado.
-- A2.41h:
+- vA2.41h:
   - X
-- A2.32h:
+- vA2.32h:
   - X
-- A2.31h:
+- vA2.31h:
   - Se agregaron 2 bases de datos nuevas, "alttusti" y "tarjetas".
   - El validador ahora puede aceptar tarjetas de Mi Pase.
   - El validador es capaz de comunicarse con el servidor de Cytibus y servidor de Mi Pase.
@@ -24,5 +27,5 @@
   - El validador es capaz de enviar tramas 9 de estadísticas.
   - El validador es capaz de actualizar su base de datos *tarjetas* todos los días a las 04:37:00.
   - Se puede actualizar el validador a la distancia por FTP desde el servidor Azure.
-- 1.14mt:
+- v1.14mt:
   - Software original Cytibus de validador antiguo.
