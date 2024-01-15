@@ -1,5 +1,7 @@
 # Cytibus-Validador-Antiguo
 
+- vA2.47X:
+  - Se actualizaron tarifas de aforos, preferente de $5 a $5.75 y normal de $11 a $11.50.
 - vA2.46X:
   - Se comento el envió de tramas RDY.
   - Se fusiono en el software la compatibilidad con cualquier version de tablilla.
