@@ -23,6 +23,8 @@ class clMifare(QtCore.QThread):
         self.clquectel = clquectel
         self.parent = parent
         self.settings = QSettings("/home/pi/innobusmx/settings.ini", QSettings.IniFormat)
+        self.flag_firmware_nuevo = False
+        self.versiones_firmware_nuevo = ['v0.25E', 'v0.25M']
         #self.preaderLocal = self.ser.ser
 
     def PathTISC(self,tisc):
@@ -85,41 +87,84 @@ class clMifare(QtCore.QThread):
                 
                 try:
                     ##################### ERNESTO LOMAR #####################
-                    tarjeta_mi_pase = obtener_tarjeta_mipase_por_UID(str(self.out)[:14])
-                    if tarjeta_mi_pase != None:
-                        print "\x1b[1;33m"+"La tarjeta es identificada como MI PASE"
-                        tarjeta_de_mi_pase = True
-                        esta_en_tiempo = periodo_5Mins_MiPase(str(self.out)[:14])
-                        if esta_en_tiempo:
-                            if tarjeta_mi_pase[1]:
-                                fecha_actual = dt.date.today()
-                                hora_actual = datetime.now().time()
-                                registro_aforo_mipase = registrar_aforo_mipase(str(self.out)[:14], 0, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), self.clquectel.latitud, self.clquectel.longitud, self.clDB.idTransportista, self.clDB.economico)
-                                if registro_aforo_mipase:
-                                    print "\x1b[1;33m"+"Registro de aforo exitoso MI PASE"
-                                    self.parent.sonidoAforo()
-                                    self.mostrar_imagen("aprobada_mipase")
+                    
+                    if any(version_firmware in self.parent.version for version_firmware in self.versiones_firmware_nuevo):
+                        
+                        self.flag_firmware_nuevo = True
+                        
+                        if "PR" in str(self.out) or "OM" in str(self.out) and len(str(self.out)) <= 20:
+                            if "PR" in str(self.out):
+                                tarjeta_mi_pase = obtener_tarjeta_mipase_por_UID(str(self.out)[:14])
+                                if tarjeta_mi_pase != None:
+                                    print "\x1b[1;33m"+"La tarjeta es identificada como MI PASE"
+                                    tarjeta_de_mi_pase = True
+                                    esta_en_tiempo = periodo_5Mins_MiPase(str(self.out)[:14])
+                                    if esta_en_tiempo:
+                                        self.preaderLocal.write('14')
+                                        if tarjeta_mi_pase[1]:
+                                            fecha_actual = dt.date.today()
+                                            hora_actual = datetime.now().time()
+                                            registro_aforo_mipase = registrar_aforo_mipase(str(self.out)[:14], 0, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), self.clquectel.latitud, self.clquectel.longitud, self.clDB.idTransportista, self.clDB.economico)
+                                            if registro_aforo_mipase:
+                                                print "\x1b[1;33m"+"Registro de aforo exitoso MI PASE"
+                                                self.mostrar_imagen("aprobada_mipase")
+                                            else:
+                                                print "\x1b[1;33m"+"No se registro el aforo MI PASE"
+                                                self.mostrar_imagen("2")
+                                        else:
+                                            self.mostrar_imagen(str(tarjeta_mi_pase[2]))
+                                    else:
+                                        self.preaderLocal.write('12')
+                                        print "\x1b[1;33m"+"La tarjeta MI PASE ya fue utilizada en este periodo de 5 minutos"
+                                        self.mostrar_imagen("0")
                                 else:
-                                    print "\x1b[1;33m"+"No se registro el aforo MI PASE"
-                                    self.parent.sonidoError()
-                                    self.mostrar_imagen("2")
+                                    tarjeta_mi_pase = False
                             else:
-                                self.parent.sonidoError()
-                                self.mostrar_imagen(str(tarjeta_mi_pase[2]))
-                        else:
-                            print "\x1b[1;33m"+"La tarjeta MI PASE ya fue utilizada en este periodo de 5 minutos"
-                            self.parent.sonidoError()
-                            self.mostrar_imagen("0")
+                                tarjeta_de_mi_pase = True
                     else:
-                        tarjeta_mi_pase = False
+                        
+                        self.flag_firmware_nuevo = False
+                        print "La version de firmware es antigua"
+                        
+                        tarjeta_mi_pase = obtener_tarjeta_mipase_por_UID(str(self.out)[:14])
+                        
+                        if tarjeta_mi_pase != None:
+                            print "\x1b[1;33m"+"La tarjeta es identificada como MI PASE"
+                            tarjeta_de_mi_pase = True
+                            esta_en_tiempo = periodo_5Mins_MiPase(str(self.out)[:14])
+                            if esta_en_tiempo:
+                                if tarjeta_mi_pase[1]:
+                                    fecha_actual = dt.date.today()
+                                    hora_actual = datetime.now().time()
+                                    registro_aforo_mipase = registrar_aforo_mipase(str(self.out)[:14], 0, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), self.clquectel.latitud, self.clquectel.longitud, self.clDB.idTransportista, self.clDB.economico)
+                                    if registro_aforo_mipase:
+                                        print "\x1b[1;33m"+"Registro de aforo exitoso MI PASE"
+                                        self.parent.sonidoAforo()
+                                        self.mostrar_imagen("aprobada_mipase")
+                                    else:
+                                        print "\x1b[1;33m"+"No se registro el aforo MI PASE"
+                                        self.parent.sonidoError()
+                                        self.mostrar_imagen("2")
+                                else:
+                                    self.parent.sonidoError()
+                                    self.mostrar_imagen(str(tarjeta_mi_pase[2]))
+                            else:
+                                print "\x1b[1;33m"+"La tarjeta MI PASE ya fue utilizada en este periodo de 5 minutos"
+                                self.parent.sonidoError()
+                                self.mostrar_imagen("0")
+                        else:
+                            tarjeta_mi_pase = False
+                            
                 except Exception, e:
                     print "Fallo la lectura de tarjeta mi pase: " + str(e)
-                    self.parent.sonidoError()
+                    if not self.flag_firmware_nuevo:
+                        self.parent.sonidoError()
                     self.mostrar_imagen("2")
                 ##################### ERNESTO LOMAR #####################
                 
                 #print "(",len(self.out),') out', self.out
                 if not tarjeta_de_mi_pase:
+                    
                     if commOK:
                         if (self.parent.flMtto or self.parent.TISC != ""):
                             print "Lector Ocupado"    
@@ -144,7 +189,8 @@ class clMifare(QtCore.QThread):
                                 if (self.parent.btnCancel.isVisible()):
                                     print "Pantalla de Operador"
                                 else:
-                                    self.parent.sonidoError()
+                                    if not self.flag_firmware_nuevo:
+                                        self.parent.sonidoError()
                                     self.msgError(err, out, self.out[0:14])
                             elif (len(self.out) == 13):
                                 c = self.clDB.dbAforo.cursor()
@@ -153,7 +199,8 @@ class clMifare(QtCore.QThread):
                                     self.parent.flMtto = True
                                     res = '1'
                                 else:
-                                    self.parent.sonidoError()
+                                    if not self.flag_firmware_nuevo:
+                                        self.parent.sonidoError()
                                     self.msgError("501", "003", self.out[0:8])
                                     res = '0'
                                 c.close
@@ -195,7 +242,8 @@ class clMifare(QtCore.QThread):
             #else:
             except Exception, e:
                 print "Fallo el run de ClMifare: " + str(e)
-                self.parent.sonidoError()
+                if not self.flag_firmware_nuevo:
+                    self.parent.sonidoError()
                 self.msgError("001", "001", "00000000000000")
                 exc_type, exc_obj, exc_tb = sys.exc_info()
                 fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
@@ -325,10 +373,12 @@ class clMifare(QtCore.QThread):
             print 'No se hizo la transacion avisar al usuario del aforo normal'
             self.parent.stMsgVigencia = ""
             if (len(stRead) == 19):
-                self.parent.sonidoError()
+                if not self.flag_firmware_nuevo:
+                    self.parent.sonidoError()
                 self.msgError(stRead[14:17], "001", str(self.valoresCard.get("csn")))
             else:
-                self.parent.sonidoError()
+                if not self.flag_firmware_nuevo:
+                    self.parent.sonidoError()
                 self.msgError("005","001",str(self.valoresCard.get("csn")))
             return False
 
@@ -377,13 +427,15 @@ class clMifare(QtCore.QThread):
             if datos[0] == "3":
                 if self.valoresCard['error']:
                     numError = '601' #'003'
-                    self.parent.sonidoError()
+                    if not self.flag_firmware_nuevo:
+                        self.parent.sonidoError()
                     self.msgError(numError,'003',str(self.valoresCard.get("csn")))                                  
                     return False
                 else:
                     if self.validarListaNegra(self.valoresCard.get("csn")):
                         numError = '602' #'003'
-                        self.parent.sonidoError()
+                        if not self.flag_firmware_nuevo:
+                            self.parent.sonidoError()
                         self.msgError(numError,'003',str(self.valoresCard.get("csn")))                                  
                         return False
                     else:
@@ -396,7 +448,8 @@ class clMifare(QtCore.QThread):
                             except:
                                 print 'Tarifa no existe en el sistema no se puede cobrar'
                                 numError = '603' #'002'
-                                self.parent.sonidoError()
+                                if not self.flag_firmware_nuevo:
+                                    self.parent.sonidoError()
                                 self.msgError(numError,'002',str(self.valoresCard.get("csn")))
                                 return False
                             if (numError == '0'):
@@ -413,7 +466,8 @@ class clMifare(QtCore.QThread):
                                     '''
                                     print "Sin caducidad"
                                     numError = '607' #'005'
-                                    self.parent.sonidoError()
+                                    if not self.flag_firmware_nuevo:
+                                        self.parent.sonidoError()
                                     self.msgError(numError,'005',str(self.valoresCard.get("csn")))                                  
                                     return False
                                 else:
@@ -453,7 +507,8 @@ class clMifare(QtCore.QThread):
                                         #if (vigencia < 0):
                                         #    self.parent.stMsgVigencia = "Tarifa Preferencial\nha Vencido"
                                         numError = '605' #'004'
-                                        self.parent.sonidoError()
+                                        if not self.flag_firmware_nuevo:
+                                            self.parent.sonidoError()
                                         self.msgError(numError,'004',str(self.valoresCard.get("csn")))
                                         return False
                                     else:
@@ -466,14 +521,16 @@ class clMifare(QtCore.QThread):
                                             print 'Tarjeta con Tarifa Preferencial Excede el Tiempo Minino'
                                             self.parent.stMsgVigencia = ""
                                             numError = '606' #'006'
-                                            self.parent.sonidoError()
+                                            if not self.flag_firmware_nuevo:
+                                                self.parent.sonidoError()
                                             self.msgError(numError,'006',str(self.valoresCard.get("csn")))                                  
                                             return False
                                         else:
                                             saldo = saldo - tarifa
                                             #if True:
                                             if self.parsearSaldoCobrar(str(saldo), tarifa):
-                                                self.parent.sonidoAforo()
+                                                if not self.flag_firmware_nuevo:
+                                                    self.parent.sonidoAforo()
                                                 self.parent.TISC = self.PathTISC(self.valoresCard.get("csn"))
                                                 saldo = saldo / 100.0
                                                 if ((self.valoresCard.get("nomTipoTar") == "PP") or (self.valoresCard.get("nomTipoTar") == "PG")):
@@ -502,6 +559,8 @@ class clMifare(QtCore.QThread):
                 self.parent.stId = "77"
                 if(self.valoresCard.get("nomTipoTar") == 'KI'):
                     print "Operador"
+                    if not self.flag_firmware_nuevo:
+                        self.parent.sonidoOperador()
                     self.parent.flOperador = True
                     self.parent.flDespachador = False
                     self.parent.stNombreO = self.valoresCard.get("nombre").decode('latin-1')
@@ -510,6 +569,8 @@ class clMifare(QtCore.QThread):
                     self.parent.stCSNO = self.valoresCard.get("csn")
                 if(self.valoresCard.get("nomTipoTar") == 'DE'):
                     print "Despachador"
+                    if not self.flag_firmware_nuevo:
+                        self.parent.sonidoOperador()
                     self.parent.stCSND = self.valoresCard.get("csn")
                     self.parent.flOperador = False
                     self.parent.flDespachador = True

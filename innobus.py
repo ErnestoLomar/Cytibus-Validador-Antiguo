@@ -28,7 +28,7 @@ os.environ['DISPLAY'] = ":0"
 
 class mainWin(QtGui.QMainWindow):
 
-    stVersion = "vA2.45h"
+    stVersion = "vA2.46X"
     flRFID = False
     updateFirmware = False
 

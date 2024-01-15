@@ -333,33 +333,36 @@ class clQuectel(QtCore.QThread):
                 self.parent.flSendEnvio = True
                 eini=eact
                 alerta = int(time.time())
-            if (self.parent.rdy):
-                #if True:
-                try:
-                    #self.printDebug(self.parent.PURPLE+"Se recibio RDY"+self.parent.RESET)
-                    fecha = time.strftime('%Y-%m-%d %H:%M:%S')
-                    if (self.latitud != ""):
-                        lat = str(self.latitud)
-                    else:
-                        lat = "0"
-                    if (self.longitud != ""):
-                        lon = str(self.longitud)
-                    else:
-                        lon = "0"
-                    fechaGPS = datetime.datetime.fromtimestamp(self.parent.lastConnection).strftime('%Y-%m-%d %H:%M:%S') 
-                    stB = "p,"+str(self.clDB.idTransportista)+","+str(self.clDB.idUnidad)+",10,Desc RDY,"+str(self.parent.csn)+","+lat+","+lon+",0,"+fechaGPS+","+str(fecha)
-                    self.clDB.envio(1,stB)
-                    self.parent.flSendEnvio = True
-                    self.parent.rdy = False
-                #else:
-                except:
-                    exc_type, exc_obj, exc_tb = sys.exc_info()
-                    fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                    st = str(sys.exc_info()[1]) + " " + str(fname) + "  " + str(exc_tb.tb_lineno)
-                    fecha = time.strftime('%Y-%m-%d %H:%M:%S')
-                    stB = "p,"+str(self.clDB.idTransportista)+","+str(self.clDB.idUnidad)+",11,RDY - "+st+" ,"+str(self.parent.csn)+",0,0,0,"+str(fecha)+","+str(fecha)
-                    self.clDB.envio(1,stB)
-                    self.parent.flSendEnvio = True
+            
+            # ######### Trama DESC RDY Deshabilitada #########
+            # if (self.parent.rdy):
+            #     #if True:
+            #     try:
+            #         #self.printDebug(self.parent.PURPLE+"Se recibio RDY"+self.parent.RESET)
+            #         fecha = time.strftime('%Y-%m-%d %H:%M:%S')
+            #         if (self.latitud != ""):
+            #             lat = str(self.latitud)
+            #         else:
+            #             lat = "0"
+            #         if (self.longitud != ""):
+            #             lon = str(self.longitud)
+            #         else:
+            #             lon = "0"
+            #         fechaGPS = datetime.datetime.fromtimestamp(self.parent.lastConnection).strftime('%Y-%m-%d %H:%M:%S') 
+            #         stB = "p,"+str(self.clDB.idTransportista)+","+str(self.clDB.idUnidad)+",10,Desc RDY,"+str(self.parent.csn)+","+lat+","+lon+",0,"+fechaGPS+","+str(fecha)
+            #         self.clDB.envio(1,stB)
+            #         self.parent.flSendEnvio = True
+            #         self.parent.rdy = False
+            #     #else:
+            #     except:
+            #         exc_type, exc_obj, exc_tb = sys.exc_info()
+            #         fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            #         st = str(sys.exc_info()[1]) + " " + str(fname) + "  " + str(exc_tb.tb_lineno)
+            #         fecha = time.strftime('%Y-%m-%d %H:%M:%S')
+            #         stB = "p,"+str(self.clDB.idTransportista)+","+str(self.clDB.idUnidad)+",11,RDY - "+st+" ,"+str(self.parent.csn)+",0,0,0,"+str(fecha)+","+str(fecha)
+            #         self.clDB.envio(1,stB)
+            #         self.parent.flSendEnvio = True
+            # ######### Trama DESC RDY Deshabilitada #########
 
             if (self.parent.flSendAforo):
                 #if True:

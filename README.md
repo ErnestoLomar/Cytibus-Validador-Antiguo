@@ -1,5 +1,8 @@
 # Cytibus-Validador-Antiguo
 
+- vA2.46X:
+  - Se comento el envió de tramas RDY.
+  - Se fusiono en el software la compatibilidad con cualquier version de tablilla.
 - vA2.45h:
   - Se modifico la cantidad de creación de tramas GPS de 3 veces, 1 vez si y 2 veces no.
   - Se quito la creación de tramas pánico.
