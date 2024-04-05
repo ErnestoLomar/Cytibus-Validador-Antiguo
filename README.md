@@ -1,5 +1,7 @@
 # Cytibus-Validador-Antiguo
 
+- vA2.50X:
+  - Se actualizaron tarifas de aforos, preferente de $5.75 a $5.
 - vA2.49X:
   - Se actualizaron tarifas de aforos, normal de $11.50 a $11.
 - vA2.48X:
