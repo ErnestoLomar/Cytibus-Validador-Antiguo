@@ -1,5 +1,10 @@
 # Cytibus-Validador-Antiguo
 
+- vA2.52X:
+  - Se modificaron las geocercas de inicio/fin de las tres rutas 5 en la base de datos flota, pasando de "22.138183820109, -100.90083271265" a "22.138506800889100, 22.138506800889100" de los idRuta 49-51.
+  - Se modificaron las geocercas de inicio/fin de las tres rutas 14 en la base de datos, pasando de "22.1969019611389, -100.929594039917" a "22.196762204443920,  -100.931326418629100" de los idRuta 43,54,55.
+- vA2.51X:
+  - Se actualizaron tarifas de aforos, preferente de $5 a $5.75.
 - vA2.50X:
   - Se actualizaron tarifas de aforos, preferente de $5.75 a $5.
 - vA2.49X:
