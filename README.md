@@ -1,5 +1,8 @@
 # Cytibus-Validador-Antiguo
 
+- vA2.54X:
+  - Se modificaron las geocercas de inicio/fin de la ruta 11 en la base de datos, pasando de "22.1383949999337, -100.892772674561" a "22.1383252828312, -100.894431363049" de los idRuta 12,13,14,15.
+  - Se modificaron las geocercas de inicio/fin de la ruta 25 'Los Gomez' en la base de datos, pasando de "22.1694821826313, -100.877022743225" a "22.1690397426632, -100.82894337072" del idRuta 22.
 - vA2.53X:
   - Se modificaron las geocercas de inicio/fin de las tres rutas 14 en la base de datos, pasando de "22.196762204443920,  -100.931326418629100" a "22.196573661187553, -100.9329936364836" de los idRuta 43,54,55.
 - vA2.52X:
