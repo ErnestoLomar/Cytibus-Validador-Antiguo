@@ -1817,6 +1817,9 @@ class clQuectel(QtCore.QThread):
                 j = stRead.find("+QCCID:")
                 self.printDebug('###                              ICCID OK ###')
                 self.parent.iccid = stRead[j+8:j+28]
+                fecha_actual = datetime.date.today()
+                hora_actual = datetime.datetime.now().time()
+                insertar_estadisticas_alttus(str(self.clDB.economico), self.clDB.idTransportista, fecha_actual.strftime("%Y-%m-%d"), hora_actual.strftime("%H:%M:%S"), "SIM", str(self.parent.iccid))
             else:
                 self.parent.iccid = ""
                 self.printDebug('###                      ERROR LEER ICCID - NS DE LA SIM ###')
