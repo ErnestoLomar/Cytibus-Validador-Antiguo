@@ -85,6 +85,7 @@ class clMifare(QtCore.QThread):
             #if True:
             try:
                 
+                '''
                 try:
                     ##################### ERNESTO LOMAR #####################
                     
@@ -163,82 +164,82 @@ class clMifare(QtCore.QThread):
                 ##################### ERNESTO LOMAR #####################
                 
                 #print "(",len(self.out),') out', self.out
-                if not tarjeta_de_mi_pase:
+                if not tarjeta_de_mi_pase:'''
                     
-                    if commOK:
-                        if (self.parent.flMtto or self.parent.TISC != ""):
-                            print "Lector Ocupado"    
-                        elif (self.parent.flTurno or self.parent.flVuelta):
-                            self.parent.closeTV = True
-                        elif (len(self.out) == 3):
-                            if (self.out.find(".") != -1):
-                                subprocess.call("xset dpms force on",shell=True)
-                                #os.system("DISPLAY=:0 xset dpms force on")
-                            if (self.out.find("1") != -1):
-                                self.settings.setValue("apagado_forzado",1)
-                                python = sys.executable
-                                os.execl(python, python, * sys.argv)
-                        else:
-                            if (len(self.out) == 19):
-                                out = "001"
-                                err = self.out[14:17]
-                                if (err == "003" or err == "004"):
-                                    out = "002"                        
-                                if (err == "001" or err == "101" or err == "102" or err == "103"):
-                                    out = "003"
-                                if (self.parent.btnCancel.isVisible()):
-                                    print "Pantalla de Operador"
-                                else:
-                                    if not self.flag_firmware_nuevo:
-                                        self.parent.sonidoError()
-                                    self.msgError(err, out, self.out[0:14])
-                            elif (len(self.out) == 13):
-                                c = self.clDB.dbAforo.cursor()
-                                c.execute("SELECT csn FROM csn WHERE csn = '"+self.out[0:11]+"'")
-                                if c.fetchone():
-                                    self.parent.flMtto = True
-                                    res = '1'
-                                else:
-                                    if not self.flag_firmware_nuevo:
-                                        self.parent.sonidoError()
-                                    self.msgError("501", "003", self.out[0:8])
-                                    res = '0'
-                                c.close
-                                #if True:
-                                try:
-                                    self.preaderLocal.write(res)
-                                #else:
-                                except:
-                                    print 'Error al escribir en el puerto'
-                            elif (len(self.out) == 5):
-                                if (self.out.find("000") != -1):
-                                    print 'No Alcanzo a leer el CSN de la TISC'
-                                else:
-                                    print "Otro Error:",self.out
-                            elif (len(self.out) > 0):
-                                if (self.out[0] == '0' or self.out[0] == '3'):
-                                    ok = self.cobrar(self.out)
-                                    if not ok:
-                                        self.preaderLocal.write('9999999')
-                                    print 'Respuesta del cobro', ok
-                                    print 'Termine la primer senial'
-                                    print '#############################'                           
-                            elif (len(self.out) == 0):
-                                print 'Reinicio Serial'
-                                if self.parent.flRFID:
-                                    self.ser.closeRFID()
-                                    self.ser.openRFID(0)
-                                    time.sleep(1)
-                            print '     Siempre leyendo aca'
-                            print '#############################'
+                if commOK:
+                    if (self.parent.flMtto or self.parent.TISC != ""):
+                        print "Lector Ocupado"    
+                    elif (self.parent.flTurno or self.parent.flVuelta):
+                        self.parent.closeTV = True
+                    elif (len(self.out) == 3):
+                        if (self.out.find(".") != -1):
+                            subprocess.call("xset dpms force on",shell=True)
+                            #os.system("DISPLAY=:0 xset dpms force on")
+                        if (self.out.find("1") != -1):
+                            self.settings.setValue("apagado_forzado",1)
+                            python = sys.executable
+                            os.execl(python, python, * sys.argv)
                     else:
-                        print "initRFID Comm No OK"
-                        #while self.parent.updateFirmware:
-                        #    time.sleep(1)
-                        #print "Inicializando RFID "
-                        self.preaderLocal = self.ser.setupRFID()
-                        time.sleep(1)
-                        #self.preaderLocal = self.ser.initRFID()
+                        if (len(self.out) == 19):
+                            out = "001"
+                            err = self.out[14:17]
+                            if (err == "003" or err == "004"):
+                                out = "002"                        
+                            if (err == "001" or err == "101" or err == "102" or err == "103"):
+                                out = "003"
+                            if (self.parent.btnCancel.isVisible()):
+                                print "Pantalla de Operador"
+                            else:
+                                if not self.flag_firmware_nuevo:
+                                    self.parent.sonidoError()
+                                self.msgError(err, out, self.out[0:14])
+                        elif (len(self.out) == 13):
+                            c = self.clDB.dbAforo.cursor()
+                            c.execute("SELECT csn FROM csn WHERE csn = '"+self.out[0:11]+"'")
+                            if c.fetchone():
+                                self.parent.flMtto = True
+                                res = '1'
+                            else:
+                                if not self.flag_firmware_nuevo:
+                                    self.parent.sonidoError()
+                                self.msgError("501", "003", self.out[0:8])
+                                res = '0'
+                            c.close
+                            #if True:
+                            try:
+                                self.preaderLocal.write(res)
+                            #else:
+                            except:
+                                print 'Error al escribir en el puerto'
+                        elif (len(self.out) == 5):
+                            if (self.out.find("000") != -1):
+                                print 'No Alcanzo a leer el CSN de la TISC'
+                            else:
+                                print "Otro Error:",self.out
+                        elif (len(self.out) > 0):
+                            if (self.out[0] == '0' or self.out[0] == '3'):
+                                ok = self.cobrar(self.out)
+                                if not ok:
+                                    self.preaderLocal.write('9999999')
+                                print 'Respuesta del cobro', ok
+                                print 'Termine la primer senial'
+                                print '#############################'                           
+                        elif (len(self.out) == 0):
+                            print 'Reinicio Serial'
+                            if self.parent.flRFID:
+                                self.ser.closeRFID()
+                                self.ser.openRFID(0)
+                                time.sleep(1)
+                        print '     Siempre leyendo aca'
+                        print '#############################'
+                else:
+                    print "initRFID Comm No OK"
+                    #while self.parent.updateFirmware:
+                    #    time.sleep(1)
+                    #print "Inicializando RFID "
+                    self.preaderLocal = self.ser.setupRFID()
+                    time.sleep(1)
+                    #self.preaderLocal = self.ser.initRFID()
             #else:
             except Exception, e:
                 print "Fallo el run de ClMifare: " + str(e)
