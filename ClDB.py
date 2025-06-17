@@ -167,6 +167,8 @@ class sqLite():
                 self.dbAforo.execute('UPDATE parametros SET urlAPN="innobusmx.itelcel.com", userAPN="", pwdAPN="", urlSocket="192.168.2.175", puertoSocket=49971, urlFTP="192.168.2.175", puertoFTP=21')
             if (self.idTransportista == 10):  # Medellin
                 self.dbAforo.execute('UPDATE parametros SET urlAPN="innobusmx.itelcel.com", userAPN="", pwdAPN="", urlSocket="192.168.2.175", puertoSocket=10000, urlFTP="192.168.2.175", puertoFTP=21')
+            if (self.idTransportista == 12):  # GPT
+                self.dbAforo.execute('UPDATE parametros SET urlAPN="innobusmx.itelcel.com", userAPN="", pwdAPN="", urlSocket="192.168.2.175", puertoSocket=5800, urlFTP="192.168.2.175", puertoFTP=21')
             self.dbAforo.commit()
         
         c.execute("SELECT idTransportista, idUnidad, economico, idRutaActual, urlAPN, userAPN, pwdAPN, urlSocket, puertoSocket, urlFTP, puertoFTP, userFTP, pwdFTP FROM parametros")

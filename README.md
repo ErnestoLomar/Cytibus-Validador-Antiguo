@@ -1,5 +1,7 @@
 # Cytibus-Validador-Antiguo
 
+- vA2.58X:
+  - Se agrego el nuevo transportista llamado GPT.
 - vA2.57X:
   - Se quito la detección de las tarjetas Mi Pase.
 - vA2.54X:
