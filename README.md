@@ -1,5 +1,7 @@
 # Cytibus-Validador-Antiguo
 
+- vA2.59X:
+  - Se modifico la tarifa.
 - vA2.58X:
   - Se agrego el nuevo transportista llamado GPT.
 - vA2.57X:
